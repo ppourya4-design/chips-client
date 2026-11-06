@@ -114,7 +114,7 @@ fn main() {
                 for (_, process) in processes.drain() {
                     if let Ok(mut child) = process.child.lock() { let _ = child.kill(); let _ = child.wait(); }
                 }
-            }
+            };
         }
     });
 }

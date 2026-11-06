@@ -15,7 +15,7 @@ test("desktop bridge starts a connector, maps events and serializes commands", a
     assert.equal(options.host, "wwts.ir:1694");
     assert.equal(options.nickname, "Ali");
     received = onLine;
-    return { write: async (line) => { lines.push(line); }, stop: async () => { stopped = true; } };
+    return { write: async (line) => { await tick(); lines.push(line); }, stop: async () => { stopped = true; } };
   };
   const socket = new DesktopSocket(spawn);
   const events: any[] = [];
@@ -29,7 +29,7 @@ test("desktop bridge starts a connector, maps events and serializes commands", a
   socket.send(JSON.stringify({type: "sendChatMessage", message: "hello\nworld"}));
   socket.send(JSON.stringify({type: "switchChannel", channelId: 3, channelPassword: "سلام"}));
   socket.send(JSON.stringify({type: "sendAudio", pcm: "QUJD"}));
-  await tick();
+  await new Promise((resolve) => setTimeout(resolve, 60));
   assert.deepEqual(lines, ["chat hello world\n", `switch 3 ${Buffer.from("سلام").toString("base64")}\n`, "audio QUJD\n"]);
   socket.close();
   await tick();
@@ -63,4 +63,22 @@ test("invalid target is rejected without starting a process", async () => {
   assert.equal(started, false);
   assert.equal(events.at(-1).type, "error");
   socket.close();
+});
+
+
+test("connector exit propagates and closes the desktop socket", async () => {
+  let exit!: (code: number | null) => void;
+  const socket = new DesktopSocket(async (_options, _line, onExit) => {
+    exit = onExit;
+    return { write: async () => {}, stop: async () => {} };
+  });
+  const events: any[] = [];
+  socket.onmessage = (ev) => events.push(JSON.parse(ev.data));
+  await tick();
+  socket.send(JSON.stringify({type: "connect", host: "wwts.ir:1694", nickname: "Ali"}));
+  await tick();
+  exit(1);
+  await tick();
+  assert.equal(events.at(-1).type, "error");
+  assert.equal(socket.readyState, WebSocket.CLOSED);
 });
