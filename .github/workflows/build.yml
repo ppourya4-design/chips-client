@@ -46,7 +46,16 @@ jobs:
           Copy-Item connector/target/x86_64-pc-windows-msvc/release/ts-connector.exe web/src-tauri/binaries/ts-connector-x86_64-pc-windows-msvc.exe
       - name: Build installer
         working-directory: web
-        run: npx tauri build --target x86_64-pc-windows-msvc --bundles nsis
+        shell: pwsh
+        run: |
+          cmd /c "npx tauri build --target x86_64-pc-windows-msvc --bundles nsis > tauri-build.log 2>&1"
+          $result = $LASTEXITCODE
+          Get-Content tauri-build.log
+          if ($result -ne 0) {
+            $summary = ((Get-Content tauri-build.log -Tail 60) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error::$summary"
+            exit $result
+          }
       - name: Upload installer
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
