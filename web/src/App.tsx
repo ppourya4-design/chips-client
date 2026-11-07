@@ -1,3 +1,4 @@
+import { clampTreeWidth, loadTreeWidth, saveTreeWidth, layoutMode, TREE_MIN } from "./windowLayout";
 import { BROADCAST_KEY, loadBroadcastPreferences } from "./broadcastPreferences";
 import { captureBinding, loadBinding, loadShortcuts, matchesBinding, sameBinding, SHORTCUTS_KEY, type KeyBinding as PttBinding, } from "./hotkeys";
 import { UiIcon } from "./UiIcon";
@@ -25,6 +26,7 @@ import "./styles/liquid-glass.css";
 // Step 3: the animation system (name styles, electric borders, avatar rings).
 // After the design sheets: it only ever adds light layers to existing elements.
 import "./styles/name-effects.css";
+import "./styles/window-layout.css";
 import {
   DEFAULT_NAME_STYLE_CONFIG,
   SOLID_NAME_STYLE_CONFIG,
@@ -8945,7 +8947,23 @@ function AppInner() {
   const [serverIconsOpen, setServerIconsOpen] = useState(false);
   const [serverIconEntries, setServerIconEntries] = useState<FileListEntry[] | null>(null);
   const [serverIconImages, setServerIconImages] = useState<Record<string, string>>({});
-  const [treeWidth, setTreeWidth] = useState(260);
+  const [treeWidth, setTreeWidth] = useState(loadTreeWidth);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [chatSheetOpen, setChatSheetOpen] = useState(false);
+  const chatBackRef = useRef<HTMLButtonElement>(null);
+  const openChatRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (chatSheetOpen) chatBackRef.current?.focus();
+    else if (document.activeElement === chatBackRef.current) openChatRef.current?.focus();
+  }, [chatSheetOpen]);
+  const narrowLayout = layoutMode(viewportWidth) === "narrow";
+  const effectiveTreeWidth = clampTreeWidth(treeWidth, viewportWidth);
+  useEffect(() => {
+    const resize = () => { setViewportWidth(window.innerWidth); setChatSheetOpen(false); };
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  useEffect(() => saveTreeWidth(treeWidth), [treeWidth]);
   const [upperHeight, setUpperHeight] = useState(340);
   const [selected, setSelected] = useState<SelectedItem | null>(null);
   const [chat, setChat] = useState<ChatEntry[]>([]);
@@ -9563,19 +9581,18 @@ function AppInner() {
 
   const appendLog = (entry: LogEntry) => setLog((prev) => [...prev.slice(-(MAX_LOG_ENTRIES - 1)), entry]);
 
-  const startTreeResize = (e: React.MouseEvent) => {
+  const startTreeResize = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     const startX = e.clientX;
-    const startWidth = treeWidth;
-    const onMove = (ev: MouseEvent) => {
-      setTreeWidth(Math.min(500, Math.max(150, startWidth + (ev.clientX - startX))));
+    const startWidth = effectiveTreeWidth;
+    e.currentTarget.onpointermove = (ev) => {
+      setTreeWidth(clampTreeWidth(startWidth + ev.clientX - startX, window.innerWidth));
     };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    // Capture keeps a drag working outside the gutter; lost capture also ends it.
+    const target = e.currentTarget;
+    target.onpointerup = () => { target.onpointermove = null; };
+    target.onlostpointercapture = () => { target.onpointermove = null; };
   };
 
   const startUpperResize = (e: React.MouseEvent) => {
@@ -11771,6 +11788,7 @@ function AppInner() {
       [clientId]: prev[clientId] ?? { partnerId: clientId, partnerName: clientName, messages: history, unread: false },
     }));
     setActiveTab(clientId);
+    setChatSheetOpen(true);
   };
 
   const handlePokeClient = (clientId: number, clientName: string) => {
@@ -12763,6 +12781,8 @@ function AppInner() {
       }${demoForceMobile ? " ts-force-mobile" : ""}${novaSplash ? " ts-nova-splash" : ""}${
         designTheme === "ide" && !idePixelFont ? " ts-ide-plain-font" : ""
       }${reduceMotion ? " chips-reduce-motion" : ""}`}
+      data-layout={narrowLayout ? "narrow" : "wide"}
+      data-chat-sheet={chatSheetOpen ? "open" : "closed"}
       data-custom-theme={activeCustomTheme?.id}
       data-design-theme={designTheme}
       data-accent={accent}
@@ -14610,7 +14630,8 @@ function AppInner() {
 
       <main className="ts-body">
         <div className="ts-upper" style={{ height: upperHeight }} data-lg>
-          <div className="ts-tree-panel" style={{ width: treeWidth }} onKeyDown={handleTreeKeyDown}>
+          <div className="ts-tree-panel" style={{ width: effectiveTreeWidth }} onKeyDown={handleTreeKeyDown}>
+            <button className="chips-open-chat" ref={openChatRef} onClick={() => { setActiveTab("channel"); setChatSheetOpen(true); }}><UiIcon name="chat" /> Open channel chat</button>
             {connected ? (
               <>
                 <div
@@ -14663,7 +14684,12 @@ function AppInner() {
             )}
           </div>
 
-          <div className="ts-resize-handle-vertical" onMouseDown={startTreeResize} />
+          <div className="ts-resize-handle-vertical" role="separator" aria-label="Resize channel tree" aria-orientation="vertical" aria-valuemin={TREE_MIN} aria-valuemax={clampTreeWidth(500, viewportWidth)} aria-valuenow={effectiveTreeWidth} tabIndex={0} onPointerDown={startTreeResize} onKeyDown={e => {
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+              e.preventDefault();
+              setTreeWidth(clampTreeWidth(e.key === "Home" ? TREE_MIN : e.key === "End" ? 500 : effectiveTreeWidth + (e.key === "ArrowRight" ? 16 : -16), viewportWidth));
+            }
+          }} />
 
           <div className="ts-side-panel">
             {connected && serverBannerUrl && showServerBanner && (
@@ -14699,7 +14725,8 @@ function AppInner() {
 
         <div className="ts-resize-handle-horizontal" onMouseDown={startUpperResize} />
 
-        <div className="ts-chat-panel" data-lg>
+        <div className="ts-chat-panel" data-lg onKeyDown={e => { if (narrowLayout && e.key === "Escape") setChatSheetOpen(false); }}>
+          <button className="chips-chat-back" ref={chatBackRef} onClick={() => { setChatSheetOpen(false); openChatRef.current?.focus(); }}><UiIcon name="back" /> Back to channels</button>
           {connected && designTheme === "ide" && (
             <div className="ts-ide-breadcrumb">
               {serverName || host}
@@ -14872,6 +14899,7 @@ function AppInner() {
         <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
         <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}</button>
         <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}><UiIcon name="headphones" /></button>
+        <button disabled aria-label="Screen share (coming later)" title="Screen share — coming later"><UiIcon name="screen" /></button>
         <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings"><UiIcon name="settings" /></button>
       </div>
       <NewsTicker />
