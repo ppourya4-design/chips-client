@@ -45,7 +45,11 @@ jobs:
           cargo build --release --locked --target x86_64-pc-windows-msvc *> connector-build.log
           $result = $LASTEXITCODE
           Get-Content connector-build.log
-          if ($result -ne 0) { exit $result }
+          if ($result -ne 0) {
+            $summary = ((Get-Content connector-build.log -Tail 80) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error::$summary"
+            exit $result
+          }
       - name: Stage connector sidecar
         shell: pwsh
         run: |
