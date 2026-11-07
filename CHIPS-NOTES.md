@@ -108,4 +108,67 @@ An initial Chips mark and title, English-only UI, and editable first-use `wwts.i
 
 The Windows workflow pins Node 22.22.3 and Rust 1.93.1, builds the unchanged connector with its lockfile, and builds an unsigned NSIS installer. GitHub Actions run [42282409728](https://github.com/ppourya4-design/chips-client/actions/runs/42282409728) succeeded for commit `590a0297e3f74b989130ad68ed14554cceaf5bdc`; its non-expired `Chips-win-x64` artifact is 6,605,872 bytes (compressed artifact size, not installed size). Four bridge unit tests and the connector build passed on the Windows runner. The Tauri Cargo dependencies are not yet locked in a committed Cargo.lock, so reproducibility of future builds remains to be addressed. Desktop sync/news are disabled and a restrictive desktop CSP is configured, but the complete no-calls-home audit and runtime verification are still required. The desktop bridge rejects bare server nicknames that would trigger the connector's TeamSpeak nickname lookup; direct host/IP input remains editable. The system DNS resolver may still be involved. Legacy stock animations and shadows are disabled as an interim safety baseline, not the Step 2/3 design.
 
-The requested CI build exit proof exists, but it does not establish runtime correctness. Still verify the installed executable and sidecar paths, audit external traffic and visible branding, and test on a real Windows PC for microphone permission, connect/voice and process cleanup. Idle RAM has **not** been measured: this Linux sandbox cannot install and run the Windows app. Measure the full Windows process tree before judging its weight against TeamSpeak 3. CI proves the build, not voice; the unsigned installer may trigger SmartScreen. No Step 2 work has started.
+The requested CI build exit proof exists, but it does not establish runtime correctness. Still verify the installed executable and sidecar paths, audit external traffic and visible branding, and test on a real Windows PC for microphone permission, connect/voice and process cleanup. Idle RAM has **not** been measured: this Linux sandbox cannot install and run the Windows app. Measure the full Windows process tree before judging its weight against TeamSpeak 3. CI proves the build, not voice; the unsigned installer may trigger SmartScreen. Step 2 is recorded below.
+
+## Step 2 — Liquid Glass reskin and the no-calls-home audit
+
+### What the design does
+
+The default design is **Liquid Glass** (`web/src/styles/liquid-glass.css`, selected with `.ts-design-glass`, listed first in Options → Design, and the fallback for a removed theme). Upstream's Standard/Nova/Pulse/IDE layouts remain selectable, unchanged.
+
+- Palette in CSS variables on the app root: `--primary`, `--primary-rgb`, `--accent`, `--accent-rgb`, `--accent-contrast`, plus the legacy `--bg`/`--border`/… names still read by the stock sheet. Background `#05050a`, surfaces `rgba(255,255,255,0.05)`, `backdrop-filter: blur(20px) saturate(160%)`, 20px card radii, pill controls.
+- Accent switcher (toolbar, four swatches) with cyan `#74e5ff` (default), purple `#a74cfd`, red `#fd1d1d`, blue `#1a56db`. The choice is persisted in `localStorage` (`chips:accent`) and written as CSS variables, so nothing else knows about colour maths (`web/src/theme.ts`).
+- **Refraction.** `web/src/liquidGlass.ts` rasterizes a rounded-rect SDF to a canvas displacement map (R/G displacement, 0.5 neutral) and drives an SVG `feDisplacementMap` through `backdrop-filter: url(#…) blur() saturate()`. The technique is adapted from [samasante/liquid-glass](https://github.com/samasante/liquid-glass), with three deliberate differences: the backdrop is refracted (not the live DOM), there is no chromatic split and no specular/glow channel in the map, and filters are generated once per bucketed element shape and cached. Bend strength is ~2.2% of the short edge, hard-capped, and lives in a rim band only.
+- Refracted surfaces are the marked `[data-lg]` ones — menubar, toolbar, body card, chat panel, log — plus open dialogs and menus. That is **8 elements** in a fully connected layout, under the 12-surface budget. Channel rows, chat lines and menu items never refract; they get plain blur at most.
+- Fallback layer: the base rule is always plain `blur() saturate()` over the glass tint; the refraction layer is an `@supports (backdrop-filter: url())` addition that only applies once the engine has assigned a filter. Without support (Firefox, or a WebView2 with the effect off) the whole module no-ops and the tint falls back slightly denser.
+- Fonts: Plus Jakarta Sans (UI) and Vazirmatn (Persian *user content* only) are bundled in `web/src/assets/fonts` from the OFL font packs, with their licence files. No font CDN.
+- Interface stays English and LTR; user-content text (nicknames, chat, away messages) gets `unicode-bidi: plaintext` so Persian reads RTL inside the English layout.
+- **No glow:** the only light is a crisp inset specular line on the top edge of each surface. No blurred coloured halos, no neon bloom, no glowing shadows anywhere; legacy designs keep the flat Step 1 look.
+- **No letter motion:** there are no keyframes in the design at all. Transitions are colour/opacity plus a 1px press translate, and `index.css` still pins `animation: none` and `text-shadow: none` globally. The Step 1 blanket `box-shadow/filter: none` was replaced with a scoped policy (legacy designs keep it) because it also erased the specular edges.
+- Layout is still TeamSpeak: server tree left, info panel right, chat below, log strip beneath — re-skinned.
+
+### No-calls-home audit (closes the open Step 1 item)
+
+Scope: what the **shipped Tauri app** does, not the optional web/gateway build. Method: static review of the frontend, the Tauri host and the connector's dependency tree, plus what the configured CSP can reach.
+
+| Path | Verdict |
+|---|---|
+| Upstream telemetry (`gateway/src/telemetry.ts`, on by default) | **Not shipped.** The gateway is not part of the desktop app; there is no Node process and no telemetry code in the bundle. |
+| Upstream account sync (`web/src/sync.ts`, `https://gateway.webspeak3.de/api/sync`) | **Disabled.** `startAutoSync` is never started when `isTauri()`; `sync.ts` itself throws in the desktop build (`if (isTauri()) throw new Error("Sync is unavailable in Chips")`); Options → Konto now renders a local-only notice instead of an account UI. No request is possible. |
+| Upstream design store (`STORE_URL`) | **Disabled.** `STORE_URL` is the empty string when `isTauri()`, the store panel is never rendered (an early return keeps the fetch in `DesignStorePanel` from ever mounting) and both "Store" buttons are hidden. |
+| Upstream news feed (`https://gateway.webspeak3.de/api/store/news`) | **Disabled.** `NEWS_FEED_URL` is the empty string when `isTauri()` and `NewsTicker` returns before fetching under `isTauri()`. A server-configured news item with a URL is rendered through `externalLinkProps`, which copies the address instead of navigating. |
+| Feedback form, donation link, own-hosted extras | **Absent.** Feedback is own-instance only, the donation link is empty under `isTauri()`, and both are web-build features. |
+| External `<a>` links (About, Help menu, ToS/imprint) | **Never navigated.** All go through `externalLinkProps`: in the desktop build the href is withheld, the click is prevented and the address is copied to the clipboard. |
+| `version.json` / service-worker update polling | **Local only.** Relative fetch against the bundled assets; the app *is* the origin (`https://tauri.localhost`), so this never leaves the machine. |
+| Connector nickname lookup (`https://named.myteamspeak.com/lookup` in `tsclientlib/tsclientlib/src/resolver.rs`) | **Unreachable.** It fires only for a bare server nickname. The Tauri host rejects an address without a dot or a colon before spawning the connector, so the path cannot be taken. Direct `host:port` input (the `wwts.ir:1694` preset) takes the plain DNS/TCP path. |
+| Connector TSDNS / `_ts3._udp` / `_gts._udp` SRV lookups | **Unmodified black box.** These are part of TeamSpeak's own resolution protocol and only run against the host the user typed. They are not analytics and were not changed. System DNS is used for a hostname the user entered. |
+| WebRTC STUN (`stun:turn.teamspeak.com`, `stun:turn2.teamspeak.com`, `stun:stun.l.google.com` in `stream.ts`/`publish.ts`) | **Reachable but deliberate.** Streaming/screen-share is an explicit user action, and ICE needs a STUN server to learn its own address. It is listed here rather than silently dropped; the stream feature is upstream's, and refusing to contact a STUN server would make it unusable. No STUN traffic occurs unless the user starts a stream. |
+| Third-party fonts, analytics, ads, crash reporting | **None.** Fonts are bundled; there is no analytics/telemetry SDK anywhere in `web/`. |
+
+### What remains in the shipped JavaScript bundle
+
+The three upstream endpoints are still *present as dead strings* in the built bundle, because Vite substitutes `import.meta.env` at build time while `isTauri()` is a runtime check, and the same bundle also serves the web build:
+
+```text
+https://gateway.webspeak3.de/api/store/news     NEWS_FEED_URL  ("" under isTauri)
+https://gateway.webspeak3.de/api/store/themes   STORE_URL      ("" under isTauri)
+https://gateway.webspeak3.de/api/sync           DEFAULT_SYNC_SERVER (call path throws under isTauri)
+```
+
+They cannot be reached from the desktop app: the desktop value of each constant is `""`, the callers are guarded, and the CSP's `connect-src 'self' ipc: http(s)://ipc.localhost` would block such a request even if a caller slipped through. Callers may notice vanity links (`webspeak3.de`, the GitHub repo, the Weblate page, `ko-fi.com`) — those are text in the About/Help UI, and in the desktop build `externalLinkProps` withholds the `href` and copies it to the clipboard instead of navigating, so they generate no traffic either. Removing the strings entirely would mean forking every call site for a bundle that also ships to the web, which is why they stay as disabled branches rather than being deleted.
+
+### The navigation guard
+
+The first attempt at a WebView2-level guard (`with_webview` + `NavigationStarting` in `web/src-tauri/src/main.rs`) was **reverted**: it needed the `webview2-com` and `windows` crates plus a hand-rolled event handler, which could not be compiled or tested in this sandbox, and shipping untested unsafe FFI in the window bootstrap was the wrong trade. It is replaced by a JavaScript guard in `web/src/main.tsx`, active only when `isTauri()`:
+
+- a capture-phase `click` listener blocks any anchor whose target is outside the bundle (`https://tauri.localhost`, `ipc:`, `about:`, `data:`, `blob:`) and copies the address instead;
+- a `MutationObserver` removes any injected `<base>` element, so relative URLs cannot be re-pointed at another origin;
+- the CSP (`default-src 'self'`, `base-uri 'none'`, `object-src 'none'`) remains the primary boundary; the guard closes the intra-bundle navigation case the CSP cannot see.
+
+Defence in depth that is now in place:
+
+- CSP (`tauri.conf.json`): `default-src 'self'`, `connect-src 'self' ipc: http(s)://ipc.localhost`, `img-src 'self' data: blob:`, `object-src 'none'`, `base-uri 'none'`. Nothing else can be loaded or fetched from the bundle.
+- Tauri capabilities: three commands only (`start_connector`, `write_connector`, `stop_connector`), each validating its input; no HTTP, shell, fs or updater plugin features are enabled in `web/src-tauri/Cargo.toml`.
+- A desktop-only navigation guard in `web/src/main.tsx`: clicks on non-bundle links are prevented and copied, and injected `<base>` elements are removed, so the WebView cannot be steered to a third-party origin after load.
+
+**Honest limits.** This is a source audit plus the CSP/capability argument; no packet capture of the installed Windows build was possible from this Linux sandbox. It should still be confirmed once with a network monitor on a real Windows machine (connect to `wwts.ir:1694`, idle, then start a stream) before the claim is treated as verified at runtime. The connector and `tsclientlib` were not modified, per the black-box rule.

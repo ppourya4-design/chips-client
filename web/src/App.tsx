@@ -15,6 +15,9 @@ import { useRegisterSW } from "virtual:pwa-register/react";
 import "./App.css";
 // After App.css: its :where() base variables have the same (zero) specificity.
 import "./styles/ide.css";
+// The default design. Last, so its :where() variables and .ts-design-glass
+// component rules sit on top of the stock sheet without !important.
+import "./styles/liquid-glass.css";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -139,6 +142,14 @@ import {
 } from "./publish";
 import { DEFAULT_ICE_SERVERS, StreamViewer, parseStreamInfo, type StreamEvent, type StreamInfo } from "./stream";
 import { DEMO_HOST, DEMO_MODE, DemoSocket } from "./demoMode";
+import {
+  ACCENT_THEMES,
+  accentVariables,
+  loadAccent,
+  saveAccent,
+  type AccentId,
+} from "./theme";
+import { installLiquidGlass } from "./liquidGlass";
 import {
   DEFAULT_SYNC_SERVER,
   SYNC_CATEGORIES,
@@ -283,9 +294,13 @@ const FEEDBACK_URL = import.meta.env.DEV
 // own messages (gateway/src/news.ts); the central feed is fetched directly,
 // like the store. The demo has no gateway and only shows the central feed.
 const NEWS_CONFIG_URL = DEMO_MODE ? null : FEEDBACK_URL.replace(/\/api\/feedback$/, "/api/news");
-const NEWS_FEED_URL = import.meta.env.DEV
-  ? "http://localhost:8080/api/store/news"
-  : import.meta.env.VITE_NEWS_URL || "https://gateway.webspeak3.de/api/store/news";
+// Empty in the desktop build: no central feed exists for Chips (audit in
+// CHIPS-NOTES.md). The news ticker returns before ever reading this.
+const NEWS_FEED_URL = isTauri()
+  ? ""
+  : import.meta.env.DEV
+    ? "http://localhost:8080/api/store/news"
+    : import.meta.env.VITE_NEWS_URL || "https://gateway.webspeak3.de/api/store/news";
 
 // Unlike GATEWAY_URL/FEEDBACK_URL above, the design store is NOT per-instance:
 // it's a single, centrally curated catalog run on the maintainer's own VPS
@@ -296,7 +311,9 @@ const NEWS_FEED_URL = import.meta.env.DEV
 // gateway's STORE_ENABLED=1) can override with VITE_STORE_URL at build time.
 // DEMO_MODE keeps the old same-origin derivation instead, which 404s on the
 // static demo host - the public demo has no write access to the real store.
-const STORE_URL = isTauri() ? `${window.location.origin}/api/store/themes` : import.meta.env.DEV
+// Empty in the desktop build: Chips ships no design store, so there is no URL
+// to fetch even if a future caller forgot the isTauri() guard.
+const STORE_URL = isTauri() ? "" : import.meta.env.DEV
   ? "http://localhost:8080/api/store/themes"
   : DEMO_MODE
     ? `${window.location.protocol}//${window.location.host}/api/store/themes`
@@ -506,7 +523,9 @@ const DESIGN_THEME_KEY = "webspeak3:design-theme";
 const DESIGN_SELECTION_KEY = "webspeak3:design-selection";
 const CUSTOM_THEMES_KEY = "webspeak3:custom-themes";
 
-type DesignTheme = "standard" | "nova" | "pulse" | "ide";
+/** "glass" is the Chips Liquid Glass design and the default; the others are
+ *  upstream's layouts, kept selectable in Options -> Design. */
+type DesignTheme = "glass" | "standard" | "nova" | "pulse" | "ide";
 
 /** A user-authored theme package: a name, which built-in layout it behaves like
  *  (Standard's plain chrome, Nova's collapsed menu/splash, Pulse's card/sidebar
@@ -547,26 +566,25 @@ const STORE_SCREENSHOT_MAX_DATA_URL_LENGTH = 400_000;
 
 function isDesignTheme(value: string): value is DesignTheme {
   return (
-    value === "standard" || value === "nova" || value === "pulse" || value === "ide"
+    value === "glass" ||
+    value === "standard" ||
+    value === "nova" ||
+    value === "pulse" ||
+    value === "ide"
   );
-}
-
-function loadDesignTheme(): DesignTheme {
-  const raw = localStorage.getItem(DESIGN_THEME_KEY);
-  if (raw && isDesignTheme(raw)) return raw;
-  return "standard";
 }
 
 function resolveDesignThemeBase(selection: string, customThemes: CustomTheme[]): DesignTheme {
   if (selection.startsWith("custom:")) {
-    // A removed base (e.g. the old GreenTeaSpeak theme) falls back to Standard.
+    // A removed base (e.g. the old GreenTeaSpeak theme) falls back to Liquid Glass.
     const base = customThemes.find((th) => `custom:${th.id}` === selection)?.baseTheme;
-    return base && isDesignTheme(base) ? base : "standard";
+    return base && isDesignTheme(base) ? base : "glass";
   }
-  return isDesignTheme(selection) ? selection : "standard";
+  return isDesignTheme(selection) ? selection : "glass";
 }
 
 function designThemeClassName(theme: DesignTheme): string {
+  if (theme === "glass") return " ts-design-glass";
   if (theme === "nova") return " ts-design-nova";
   if (theme === "pulse") return " ts-design-pulse";
   if (theme === "ide") return " ts-design-ide";
@@ -574,6 +592,7 @@ function designThemeClassName(theme: DesignTheme): string {
 }
 
 function designThemeLabel(theme: DesignTheme, t: (key: string) => string): string {
+  if (theme === "glass") return t("design.theme.glass");
   if (theme === "nova") return t("design.theme.nova");
   if (theme === "pulse") return t("design.theme.pulse");
   if (theme === "ide") return t("design.theme.ide");
@@ -605,8 +624,14 @@ function saveCustomThemes(list: CustomTheme[]) {
 
 function loadDesignSelection(): string {
   const raw = localStorage.getItem(DESIGN_SELECTION_KEY);
-  // A removed builtin (e.g. "greenteaspeak") falls back to Standard.
-  return raw && (raw.startsWith("custom:") || isDesignTheme(raw)) ? raw : loadDesignTheme();
+  if (raw && (raw.startsWith("custom:") || isDesignTheme(raw))) return raw;
+  // Nothing ever picked: an install from before Step 2 only has the resolved
+  // theme key, and its "standard" there was the old implicit default rather
+  // than a choice — that one upgrades to Liquid Glass. An explicitly chosen
+  // Nova/Pulse/IDE (or custom) design is kept.
+  const legacy = localStorage.getItem(DESIGN_THEME_KEY);
+  if (!raw && legacy && isDesignTheme(legacy) && legacy !== "standard") return legacy;
+  return "glass";
 }
 
 function loadBoolPref(key: string, fallback: boolean): boolean {
@@ -2375,9 +2400,9 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
         <div className="ts-dialog-body">
           <p>{t("about.text")}</p>
           <p>
-            <a href="https://webspeak3.de" target="_blank" rel="noreferrer">webspeak3.de</a>
+            <a {...externalLinkProps("https://webspeak3.de")}>webspeak3.de</a>
             {" · "}
-            <a href="https://github.com/WebSpeak3/webspeak3" target="_blank" rel="noreferrer">GitHub</a>
+            <a {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}>GitHub</a>
           </p>
           <figure className="ts-about-memorial">
             <img src={akimoPhoto} alt="Akimo" width={120} height={120} />
@@ -2440,14 +2465,14 @@ function ToSDialog({ mandatory, onAccept, onClose }: { mandatory: boolean; onAcc
             <li>{t("tos.rule3")}</li>
             <li>
               {t("tos.rule4Pre")}
-              <a href="https://webspeak3.de/datenschutz.html" target="_blank" rel="noreferrer">
+              <a {...externalLinkProps("https://webspeak3.de/datenschutz.html")}>
                 {t("tos.privacyLinkText")}
               </a>
               {t("tos.rule4Post")}
             </li>
             <li>
               {t("tos.rule5Pre")}
-              <a href="https://webspeak3.de/impressum.html" target="_blank" rel="noreferrer">
+              <a {...externalLinkProps("https://webspeak3.de/impressum.html")}>
                 {t("tos.legalLinkText")}
               </a>
               {t("tos.rule5Post")}
@@ -3110,7 +3135,7 @@ function NewsTicker() {
         {inApp ? (
           <a href={new URL(url).hash}>{label(item)}</a>
         ) : url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer">
+          <a {...externalLinkProps(url)}>
             {label(item)}
           </a>
         ) : (
@@ -6522,6 +6547,18 @@ function KontoPanel() {
   // Status changes (a push in the background) also move version/lastSync.
   useEffect(() => setAccount(loadSyncAccount()), [status]);
 
+  // Chips ships without upstream's account-sync service (see the no-calls-home
+  // audit in CHIPS-NOTES.md). The panel stays because saved identities and
+  // favourites are still local, but it never offers an account or a request.
+  if (isTauri()) {
+    return (
+      <>
+        <h3>{t("options.section.konto")}</h3>
+        <p className="ts-options-hint">{t("sync.unavailableDesktop")}</p>
+      </>
+    );
+  }
+
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
     setError("");
@@ -6764,6 +6801,53 @@ type CustomThemeDraft = { id: string | null; name: string; baseTheme: DesignThem
  *  four icons (edit/duplicate/export/delete) render at the same size and
  *  color - mixing text glyphs with an emoji (as before) made them look
  *  inconsistent across fonts/platforms. */
+/** Compact floating accent switcher: four pill swatches in the toolbar. The
+ *  swatch colour is the accent itself, which is fine — an accent *dot* is not a
+ *  glow; the hard rule bans blurred halos, and the glass edge stays crisp. */
+function AccentSwitcher({
+  accent,
+  onChange,
+}: {
+  accent: AccentId;
+  onChange: (next: AccentId) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="ts-accent-switcher" role="radiogroup" aria-label={t("accent.label")}>
+      {ACCENT_THEMES.map((theme) => (
+        <button
+          key={theme.id}
+          type="button"
+          role="radio"
+          aria-checked={theme.id === accent}
+          className={`ts-accent-dot${theme.id === accent ? " ts-accent-dot-active" : ""}`}
+          style={{ "--dot": theme.hex } as React.CSSProperties}
+          onClick={() => onChange(theme.id)}
+          title={t("accent.use", { name: theme.name })}
+          aria-label={t("accent.use", { name: theme.name })}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Desktop builds have no browser tab to open, and navigating the Tauri
+ *  WebView away from the app shell would be a network request to a third
+ *  party. So an external link in the desktop app copies its address instead of
+ *  navigating; the web build keeps normal in-page links. */
+function externalLinkProps(href: string) {
+  if (!isTauri()) return { href, target: "_blank", rel: "noreferrer" } as const;
+  return {
+    href: undefined,
+    role: "button",
+    onClick: (event: React.MouseEvent) => {
+      event.preventDefault();
+      void navigator.clipboard?.writeText(href);
+    },
+    title: `${href} (copied)`,
+  } as const;
+}
+
 function ActionIcon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -7474,6 +7558,7 @@ function DesignPanel({
   const iconPackInputRef = useRef<HTMLInputElement | null>(null);
 
   const builtins: { id: DesignTheme; name: string; desc: string }[] = [
+    { id: "glass", name: t("design.theme.glass"), desc: t("design.theme.glass.desc") },
     { id: "standard", name: t("design.theme.standard"), desc: t("design.theme.standard.desc") },
     { id: "nova", name: t("design.theme.nova"), desc: t("design.theme.nova.desc") },
     { id: "pulse", name: t("design.theme.pulse"), desc: t("design.theme.pulse.desc") },
@@ -7536,7 +7621,9 @@ function DesignPanel({
     }
   };
 
-  if (storeOpen) {
+  // Chips has no design store: the panel and its fetch path are web-only (see
+  // the no-calls-home audit in CHIPS-NOTES.md).
+  if (storeOpen && !isTauri()) {
     return (
       <DesignStorePanel
         customThemes={customThemes}
@@ -7564,6 +7651,7 @@ function DesignPanel({
             value={editing.baseTheme}
             onChange={(e) => setEditing({ ...editing, baseTheme: e.target.value as DesignTheme })}
           >
+            <option value="glass">{t("design.theme.glass")}</option>
             <option value="standard">{t("design.theme.standard")}</option>
             <option value="nova">{t("design.theme.nova")}</option>
             <option value="pulse">{t("design.theme.pulse")}</option>
@@ -7681,7 +7769,7 @@ function DesignPanel({
           style={{ display: "none" }}
           onChange={handleImportSelected}
         />
-        <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>
+        {!isTauri() && <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>}
       </div>
         <h4 className="ts-design-manage-heading">{t("design.iconPack")}</h4>
         {prefs.iconPacks.length === 0 ? (
@@ -7783,7 +7871,7 @@ function DesignPanel({
             </label>
             <div className="ts-design-custom-actions">
               <button onClick={() => setManageOpen(true)}>{t("design.manage")}</button>
-              <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>
+              {!isTauri() && <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>}
             </div>
           </fieldset>
           <fieldset className="ts-options-fieldset">
@@ -8919,6 +9007,13 @@ function AppInner() {
   );
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => loadCustomThemes());
   const [designSelection, setDesignSelection] = useState<string>(() => loadDesignSelection());
+  // Chips accent ramp (cyan/purple/red/blue). Written onto the app root as CSS
+  // variables below, so exactly one place owns the colour maths.
+  const [accent, setAccent] = useState<AccentId>(() => loadAccent());
+  const handleAccentChange = (next: AccentId) => {
+    setAccent(next);
+    saveAccent(next);
+  };
   const activeCustomTheme = designSelection.startsWith("custom:")
     ? customThemes.find((th) => `custom:${th.id}` === designSelection) ?? null
     : null;
@@ -8950,7 +9045,7 @@ function AppInner() {
       saveCustomThemes(next);
       return next;
     });
-    if (designSelection === `custom:${id}`) handleDesignSelectionChange("standard");
+    if (designSelection === `custom:${id}`) handleDesignSelectionChange("glass");
   };
   // Custom themes ship as free-form CSS - inject/replace it in a dedicated <style>
   // tag while active, and drop it the moment no custom theme is selected.
@@ -12556,6 +12651,12 @@ function AppInner() {
   // Nova and IDE collapse the menubar behind a hamburger button.
   const compactMenu = designTheme === "nova" || designTheme === "ide";
   const micLabel = !micOn ? t("toolbar.micEnable") : inputMuted ? t("toolbar.micUnmute") : t("toolbar.micMute");
+  // One object per accent change: React diffs the custom properties by value, so
+  // this is a plain object rather than a per-render rebuild of the palette.
+  const accentStyle = useMemo(() => accentVariables(accent) as React.CSSProperties, [accent]);
+  // Refraction needs the SVG filter definitions mounted once; the hook no-ops
+  // where `backdrop-filter: url()` is unsupported.
+  useEffect(() => installLiquidGlass(), []);
   const streamLabel = DEMO_MODE
     ? t("publish.demoUnavailable")
     : `${publishState === "live" ? t("publish.stop") : t("publish.start")} (${t("publish.alpha")})`;
@@ -12570,11 +12671,13 @@ function AppInner() {
       }`}
       data-custom-theme={activeCustomTheme?.id}
       data-design-theme={designTheme}
+      data-accent={accent}
+      style={accentStyle}
     >
       {DEMO_MODE && (
         <div className="ts-demo-banner">
           Demo mode — simulated data only, no real TeamSpeak server involved.{" "}
-          <a href="https://github.com/WebSpeak3/webspeak3" target="_blank" rel="noreferrer">
+          <a {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}>
             WebSpeak3 project
           </a>
           <button className="ts-demo-mobile-toggle" onClick={() => setDemoForceMobile((v) => !v)}>
@@ -12582,7 +12685,7 @@ function AppInner() {
           </button>
         </div>
       )}
-      <div className="ts-menubar">
+      <div className="ts-menubar" data-lg>
         <div className={compactMenu ? "ts-nova-menu-dropdown" : undefined} ref={novaMenuRef}>
         {compactMenu && (
           <button
@@ -13081,9 +13184,7 @@ function AppInner() {
               </button>
               <a
                 className="ts-menu-item"
-                href="https://github.com/WebSpeak3/webspeak3"
-                target="_blank"
-                rel="noreferrer"
+                {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}
                 onClick={() => setHelpMenuOpen(false)}
               >
                 <span className="ts-menu-item-icon">🐙</span>
@@ -13091,9 +13192,7 @@ function AppInner() {
               </a>
               <a
                 className="ts-menu-item"
-                href="https://github.com/WebSpeak3/webspeak3/releases"
-                target="_blank"
-                rel="noreferrer"
+                {...externalLinkProps("https://github.com/WebSpeak3/webspeak3/releases")}
                 onClick={() => setHelpMenuOpen(false)}
               >
                 <span className="ts-menu-item-icon">📋</span>
@@ -13101,9 +13200,7 @@ function AppInner() {
               </a>
               <a
                 className="ts-menu-item"
-                href="https://hosted.weblate.org/projects/webspeak3/"
-                target="_blank"
-                rel="noreferrer"
+                {...externalLinkProps("https://hosted.weblate.org/projects/webspeak3/")}
                 onClick={() => setHelpMenuOpen(false)}
               >
                 <span className="ts-menu-item-icon">🌐</span>
@@ -13139,7 +13236,7 @@ function AppInner() {
         )}
       </div>
 
-      <div className="ts-toolbar">
+      <div className="ts-toolbar" data-lg>
         {designTheme === "nova" && connected && ownClient && (
           <div className="ts-nova-toolbar-self">
             <span className="ts-nova-toolbar-avatar">
@@ -13385,6 +13482,7 @@ function AppInner() {
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
+          <AccentSwitcher accent={accent} onChange={handleAccentChange} />
           <img src={`${import.meta.env.BASE_URL}chips-mark.png`} alt="" className="ts-app-logo" />
           <span className="ts-app-title" role="heading" aria-level={1}>Chips</span>
         </div>
@@ -14402,7 +14500,7 @@ function AppInner() {
       )}
 
       <main className="ts-body">
-        <div className="ts-upper" style={{ height: upperHeight }}>
+        <div className="ts-upper" style={{ height: upperHeight }} data-lg>
           <div className="ts-tree-panel" style={{ width: treeWidth }} onKeyDown={handleTreeKeyDown}>
             {connected ? (
               <>
@@ -14490,7 +14588,7 @@ function AppInner() {
 
         <div className="ts-resize-handle-horizontal" onMouseDown={startUpperResize} />
 
-        <div className="ts-chat-panel">
+        <div className="ts-chat-panel" data-lg>
           {connected && designTheme === "ide" && (
             <div className="ts-ide-breadcrumb">
               {serverName || host}
@@ -14643,7 +14741,7 @@ function AppInner() {
         </div>
       </main>
 
-      <div className="ts-log">
+      <div className="ts-log" data-lg>
         {log.slice(-50).map((entry, i) => {
           let text = entry.text;
           if (/os[- ]?error\s*10049/i.test(text) || /angeforderte Adresse ist in diesem Kontext ungültig/i.test(text)) {

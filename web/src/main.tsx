@@ -19,6 +19,37 @@ import {
   takeSyncLink,
 } from './sync'
 
+// No-calls-home guard (desktop only). Everything the app renders must stay
+// inside the bundle: a top-level navigation or a `<base>` change would be a
+// third-party request the CSP can no longer pre-empt once the bundle has
+// loaded. In the desktop build the bundle IS the document, so navigating away
+// is refused and the address is put on the clipboard instead (there is no
+// browser tab to open). See the no-calls-home audit in CHIPS-NOTES.md.
+if (isTauri()) {
+  const BUNDLE =
+    /^(https?:\/\/(tauri\.localhost|localhost)([:/]|$)|ipc:|https?:\/\/ipc\.localhost|about:|data:|blob:)/i;
+  document.addEventListener(
+    'click',
+    (event) => {
+      const anchor = (event.target as Element | null)?.closest?.('a[href]')
+      const href = anchor?.getAttribute('href') ?? ''
+      if (!href || href.startsWith('#') || BUNDLE.test(href)) return
+      event.preventDefault()
+      void navigator.clipboard?.writeText(href)
+    },
+    true,
+  )
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof HTMLElement)) continue
+        const bases = node.tagName === 'BASE' ? [node] : [...node.querySelectorAll('base')]
+        for (const base of bases) base.remove()
+      }
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true })
+}
+
 const root = createRoot(document.getElementById('root')!)
 
 // App reads its stored identities/favorites while loading, so it's imported only after the vault is open

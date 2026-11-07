@@ -999,5 +999,14 @@
   "sync.error.pow_required": "Security check failed, please try again.",
   "sync.error.conflict": "Another device changed something in the meantime.",
   "sync.error.payload_too_large": "Too much data to sync (max. 1 MB).",
-  "sync.error.generic": "Sync failed."
+  "sync.error.generic": "Sync failed.",
+  "design.theme.glass": "Liquid Glass",
+  "design.theme.glass.desc": "Translucent layered glass on black, with pill controls and a light-specular edge.",
+  "accent.label": "Accent colour",
+  "accent.use": "Use {name} accent",
+  "accent.cyan": "Cyan",
+  "accent.purple": "Purple",
+  "accent.red": "Red",
+  "accent.blue": "Blue",
+  "sync.unavailableDesktop": "Account sync is not part of Chips. Identities, favourites and settings are stored locally on this PC only, and the client never contacts a sync server."
 }
