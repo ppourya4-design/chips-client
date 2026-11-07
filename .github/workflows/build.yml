@@ -38,9 +38,14 @@ jobs:
           npm ci --prefix web
           & ./gateway/node_modules/.bin/tsx.cmd --test web/tests/desktop-bridge.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build unchanged connector
+      - name: Build connector
         working-directory: connector
-        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+        shell: pwsh
+        run: |
+          cargo build --release --locked --target x86_64-pc-windows-msvc *> connector-build.log
+          $result = $LASTEXITCODE
+          Get-Content connector-build.log
+          if ($result -ne 0) { exit $result }
       - name: Stage connector sidecar
         shell: pwsh
         run: |
