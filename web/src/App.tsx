@@ -34,7 +34,7 @@ import {
   NAME_STYLES,
   AVATAR_RINGS,
 } from "./nameEffects";
-import { loadProfileStyle, saveProfileStyle, exportStylesJson, importStylesJson, type ProfileStyle } from "./profileStyle";
+import { loadProfileStyle, saveProfileStyle, exportStylesJson, importStylesJson, parseStyleToken, encodeStyleToken, replaceStyleToken, type ProfileStyle } from "./profileStyle";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -1132,6 +1132,7 @@ interface ClientInfo {
   isQuery?: boolean;
   /** MD5 of the avatar, empty without one; missing from gateways before v0.15. */
   avatarHash?: string;
+  description?: string;
 }
 
 interface GroupEntry {
@@ -1527,6 +1528,7 @@ function ChannelTree({
   // Channels the user expanded/collapsed against the design tab's default.
   const [toggled, setToggled] = useState<Set<number>>(() => new Set());
   const [dragOverChannelId, setDragOverChannelId] = useState<number | null>(null);
+  const [profileClientId, setProfileClientId] = useState<number | null>(null);
   // Module-level click tracking (see lastChannelClick) — refs alone are not
   // enough when Select re-renders remount nested ChannelTree instances.
   const children = channels.filter((c) => c.parent === parent).sort((a, b) => a.order - b.order);
@@ -1579,7 +1581,10 @@ function ChannelTree({
     });
   };
 
+  const profileClient = clients.find(c => c.id === profileClientId);
+  const groupCategory = (name: string): "Staff" | "Rank" | "Games" | "Fun" => /admin|moderator|staff|owner|support/i.test(name) ? "Staff" : /rank|level|xp|rookie|member|veteran|legend/i.test(name) ? "Rank" : /game|minecraft|valorant|league|cs2|apex|fortnite|dota/i.test(name) ? "Games" : "Fun";
   return (
+    <>
     <ul
       className={`ts-tree-list${parent === 0 ? " ts-tree-list-root" : ""}`}
       role={parent === 0 ? "tree" : "group"}
@@ -1788,20 +1793,9 @@ function ChannelTree({
                     <span className="ts-client-status-leading">
                       <ClientStatusIcons client={c} />
                     </span>
-                    <AvatarTile
-                      client={c}
-                      images={groupIconImages}
-                      className="ts-client-avatar"
-                      isSelf={c.id === ownClientId}
-                    />
+                    <AvatarRing ring={parseStyleToken(c.description ?? "")?.ring ?? "gradient"} speaking={clientSpeaking && parseStyleToken(c.description ?? "")?.talk !== false}><AvatarTile client={c} images={groupIconImages} className="ts-client-avatar" isSelf={c.id === ownClientId}/></AvatarRing>
                     {tree.flags && countryFlag(c.country) && <span title={c.country}>{countryFlag(c.country)}</span>}
-                    {/* The local user's own name carries the chosen Step 3 style;
-                        every other row keeps the plain flat label. */}
-                    {c.id === ownClientId ? (
-                      <NamePlate text={c.name} premium speaking={clientSpeaking} className="ts-tree-label" />
-                    ) : (
-                      <span className="ts-tree-label">{c.name}</span>
-                    )}
+                    <button type="button" className="ts-plain-button ts-tree-label" onClick={e=>{e.stopPropagation();setProfileClientId(c.id);}} title={`View ${c.name} profile`}><NamePlate text={c.name} premium={Boolean(parseStyleToken(c.description ?? ""))} className="ts-tree-label" config={parseStyleToken(c.description ?? "")?.name} speaking={clientSpeaking && parseStyleToken(c.description ?? "")?.talk !== false}/></button>
                     {tree.awayMessage && c.away && c.awayMessage && (
                       <span className="ts-client-away-message">({c.awayMessage})</span>
                     )}
@@ -1821,6 +1815,8 @@ function ChannelTree({
         );
       })}
     </ul>
+    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile">×</button><div className="chips-profile-banner" style={{background:profileClient.id===ownClientId&&loadProfileStyle().bannerImage?`center/cover url(\"${loadProfileStyle().bannerImage}\")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
+    </>
   );
 }
 
@@ -4673,7 +4669,7 @@ function clientAvatarUrl(client: ClientInfo, images: Record<string, string>): st
 function ProfileStyleEditor({ value, onChange, onClose }: { value: ProfileStyle; onChange: (v: ProfileStyle) => void; onClose: () => void }) {
   const setName = (patch: Partial<NameStyleConfig>) => onChange({...value,name:{...value.name,...patch}});
   const file = (text: string) => { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download="styles.json"; a.click(); URL.revokeObjectURL(a.href); };
-  return <div className="ts-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section role="dialog" aria-modal="true" aria-label="Profile style" className="ts-modal" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:`linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}><NamePlate text="Your name" premium/><div>Custom status · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><p>Banner <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
+  return <div className="ts-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section role="dialog" aria-modal="true" aria-label="Profile style" className="ts-modal" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,bannerImage:String(r.result)});r.readAsDataURL(f);}}}/> <button onClick={()=>onChange({...value,bannerImage:undefined})}>Clear</button></p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
 }
 
 function NamePlate({
@@ -4681,13 +4677,16 @@ function NamePlate({
   premium = false,
   speaking = false,
   className,
+  config,
 }: {
   text: string;
   premium?: boolean;
   speaking?: boolean;
   className?: string;
+  config?: NameStyleConfig;
 }) {
-  const configured = useContext(NameStyleContext);
+  const contextual = useContext(NameStyleContext);
+  const configured = config ?? contextual;
   const { style, ...attrs } = namePlateAttributes(
     premium ? configured : SOLID_NAME_STYLE_CONFIG,
     text,
@@ -10228,6 +10227,8 @@ function AppInner() {
           break;
         case "channels": {
           const newClients: ClientInfo[] = data.clients;
+          const ownSnapshot = newClients.find(c => c.id === data.ownClientId);
+          if (ownSnapshot) syncProfileToken(ownSnapshot.description ?? "");
           const prevClients = previousClientsRef.current;
           if (prevClients) {
             const ownId = typeof data.ownClientId === "number" && data.ownClientId > 0 ? data.ownClientId : null;
@@ -12809,7 +12810,8 @@ function AppInner() {
   const [nameStyle, setNameStyle] = useState<NameStyleConfig>(loadNameStyleConfig);
   const [profileStyle, setProfileStyle] = useState<ProfileStyle>(loadProfileStyle);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
-  const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); };
+  const syncProfileToken = (description: string) => { const token = encodeStyleToken(profileStyle); if (description.match(/\[s:v1;[^\]]*\]/)?.[0] !== token) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(description, token) })); };
+  const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); const own = clients.find(c => c.id === ownClientId); if (connected && own) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(own.description ?? "", encodeStyleToken(next)) })); };
   // "Reduce animations": the in-app switch, on top of the OS preference that the
   // stylesheet already honours. Freezes every Step 3 effect to a static gradient.
   const [reduceMotion, setReduceMotion] = useState<boolean>(loadReduceMotion);
