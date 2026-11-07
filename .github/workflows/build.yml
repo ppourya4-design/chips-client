@@ -31,12 +31,12 @@ jobs:
         with:
           toolchain: '1.93.1'
           targets: x86_64-pc-windows-msvc
-      - name: Install dependencies and test bridge
+      - name: Install dependencies and run the test suite
         shell: pwsh
         run: |
           npm ci --prefix gateway
           npm ci --prefix web
-          & ./gateway/node_modules/.bin/tsx.cmd --test web/tests/desktop-bridge.test.ts web/tests/motion-policy.test.ts web/tests/settings-hub.test.ts web/tests/hotkeys.test.ts web/tests/audio-dsp.test.ts web/tests/vector-icons.test.ts web/tests/window-layout.test.ts
+          & ./gateway/node_modules/.bin/tsx.cmd --test web/tests/desktop-bridge.test.ts web/tests/motion-policy.test.ts web/tests/settings-hub.test.ts web/tests/hotkeys.test.ts web/tests/audio-dsp.test.ts web/tests/vector-icons.test.ts web/tests/window-layout.test.ts web/tests/theme-file.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build connector
         working-directory: connector

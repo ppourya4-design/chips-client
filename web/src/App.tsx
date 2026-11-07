@@ -172,6 +172,18 @@ import {
   saveAccent,
   type AccentId,
 } from "./theme";
+import {
+  builtinAccentOf,
+  builtinThemeId,
+  loadActiveThemeId,
+  loadThemeFiles,
+  saveActiveThemeId,
+  saveThemeFiles,
+  themeFileSelection,
+  themeVariables,
+  type ThemeFile,
+} from "./themeFile";
+import { ThemeFilePanel } from "./ThemeFilePanel";
 import { installLiquidGlass } from "./liquidGlass";
 import {
   DEFAULT_SYNC_SERVER,
@@ -9018,6 +9030,11 @@ function AppInner() {
   const handleAccentChange = (next: AccentId) => {
     setAccent(next);
     saveAccent(next);
+    // An accent *is* one of the built-in themes, so picking a swatch while a
+    // .chipstheme is active returns to that built-in instead of leaving a
+    // control on screen that the file would silently override.
+    setActiveThemeId(builtinThemeId(next));
+    saveActiveThemeId(builtinThemeId(next));
   };
   const activeCustomTheme = designSelection.startsWith("custom:")
     ? customThemes.find((th) => `custom:${th.id}` === designSelection) ?? null
@@ -12686,9 +12703,63 @@ function AppInner() {
   // Nova and IDE collapse the menubar behind a hamburger button.
   const compactMenu = designTheme === "nova" || designTheme === "ide";
   const micLabel = !micOn ? t("toolbar.micEnable") : inputMuted ? t("toolbar.micUnmute") : t("toolbar.micMute");
+  // Step 7: .chipstheme files. `themeFiles` are the imported ones (the built-in
+  // Liquid Glass accents are code, not files); `activeThemeId` is either
+  // "accent:<id>" or "file:<id>". A file only ever contributes custom
+  // properties — see src/themeFile.ts for the allowlist.
+  const [themeFiles, setThemeFiles] = useState<ThemeFile[]>(() => loadThemeFiles());
+  const [activeThemeId, setActiveThemeId] = useState<string>(() =>
+    loadActiveThemeId(loadAccent()),
+  );
+  const activeThemeFile = activeThemeId.startsWith("file:")
+    ? themeFiles.find((theme) => themeFileSelection(theme.id) === activeThemeId) ?? null
+    : null;
+  const activeBuiltinAccent = builtinAccentOf(activeThemeId) ?? accent;
+
+  const handleSelectTheme = (id: string) => {
+    const builtin = builtinAccentOf(id);
+    if (builtin) {
+      // A built-in theme *is* one of the four accents, so the existing accent
+      // state (persisted in chips:accent) stays the source of truth for it.
+      setAccent(builtin);
+      saveAccent(builtin);
+    }
+    setActiveThemeId(id);
+    saveActiveThemeId(id);
+  };
+  const handleImportTheme = (theme: ThemeFile) => {
+    setThemeFiles((prev) => {
+      const next = [...prev, theme];
+      saveThemeFiles(next);
+      return next;
+    });
+    handleSelectTheme(themeFileSelection(theme.id));
+  };
+  const handleRemoveTheme = (id: string) => {
+    setThemeFiles((prev) => {
+      const next = prev.filter((theme) => theme.id !== id);
+      saveThemeFiles(next);
+      return next;
+    });
+    if (activeThemeId === themeFileSelection(id)) handleSelectTheme(builtinThemeId(accent));
+  };
+
+  useEffect(() => {
+    if (activeThemeId.startsWith("file:") && !activeThemeFile) {
+      setActiveThemeId(builtinThemeId(accent));
+      saveActiveThemeId(builtinThemeId(accent));
+    }
+  }, [activeThemeId, activeThemeFile, accent]);
+
   // One object per accent change: React diffs the custom properties by value, so
   // this is a plain object rather than a per-render rebuild of the palette.
-  const accentStyle = useMemo(() => accentVariables(accent) as React.CSSProperties, [accent]);
+  // The active .chipstheme (if any) is layered on top of it; unmounting it drops
+  // every property again, because they only ever live in this inline style.
+  const accentStyle = useMemo(() => {
+    const vars: Record<string, string> = { ...accentVariables(accent) };
+    if (activeThemeFile) Object.assign(vars, themeVariables(activeThemeFile));
+    return vars as React.CSSProperties;
+  }, [accent, activeThemeFile]);
   // Step 3. The name style is read from localStorage today (Shimmer Gradient by
   // default); Step 4's customization panel will add the setter and the profile
   // card, both of which only need this same NameStyleConfig.
@@ -13968,6 +14039,12 @@ function AppInner() {
                 <IconPackPanel />
                 <h4>Accent</h4>
                 <AccentSwitcher accent={accent} onChange={handleAccentChange} />
+                {activeThemeFile && (
+                  <p className="ts-options-hint">
+                    "{activeThemeFile.name}" is a theme file. It sets its own accent,
+                    so picking an accent here returns to that built-in theme.
+                  </p>
+                )}
                 {designTheme === "glass" && !activeCustomTheme && (
                   <label className="ts-dialog-field">
                   Liquid Glass intensity
@@ -14006,10 +14083,15 @@ function AppInner() {
                   </select>
                 </label>
                 <ChatPanel />
-                <p>
-                  <strong>Theme files — Step 7 (not implemented).</strong> .chipstheme
-                  import/export will live here.
-                </p>
+                <ThemeFilePanel
+                  themes={themeFiles}
+                  activeId={activeThemeId}
+                  accent={activeBuiltinAccent}
+                  activeTheme={activeThemeFile}
+                  onSelect={handleSelectTheme}
+                  onImport={handleImportTheme}
+                  onRemove={handleRemoveTheme}
+                />
               </>
             ),
             profile: (
