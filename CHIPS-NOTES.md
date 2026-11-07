@@ -304,8 +304,12 @@ now carries the attributes.
   premium name style.
 - **Info panel** — the featured card gets `.chips-electric-border` (spark variant) when a client
   is selected and `.chips-electric-border--quiet` for the calmer server/channel views. The
-  selected client's photo gets the electric ring while they speak and the slow gradient ring
-  when they are quiet; the local user's own name in that card uses the chosen style.
+  selected client's avatar gets the electric ring while they speak and the slow gradient ring
+  when they are quiet; the local user's own name in that card uses the chosen style. A client who
+  never uploaded a photo gets a 64px initials tile as the ring's host — but only in the glass
+  design (`.ts-info-avatar-initials` is `display: none` elsewhere), so the other layouts keep
+  their photo-only panel and never show a ring. The panel also keeps its own scrolling: the ring
+  is drawn inside its box, so `overflow: visible` is not forced on that card.
 - **Speaking strip** (Pulse/IDE) — avatar rings and the premium plate for the local user. The
   strip only exists in those legacy layouts, so the effect classes are inert there today; the
   wiring is in place for when those layouts adopt the system.

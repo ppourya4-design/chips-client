@@ -2012,6 +2012,7 @@ function InfoPanel({
       : [];
     const clientSpeaking =
       talkers.has(client.id) && client.hasTalkPower && !client.inputMuted && client.inputHardwareEnabled;
+    const clientPhoto = clientAvatarUrl(client, images);
     return (
       // The featured card of the design gets the spark border (Step 3 effect 2);
       // its avatar gets the same effect in small format while the client talks,
@@ -2029,11 +2030,23 @@ function InfoPanel({
             <span>{client.name}</span>
           )}
         </div>
-        {clientAvatarUrl(client, images) && (
-          <AvatarRing ring={clientSpeaking ? "electric" : "gradient"} speaking={clientSpeaking} square>
-            <img className="ts-info-avatar" src={clientAvatarUrl(client, images)!} alt="" />
-          </AvatarRing>
-        )}
+        {/* The ring needs a host even when the client never uploaded a photo,
+            so the glass design shows an initials tile in that case. Legacy
+            designs keep their photo-only panel (the tile is display: none
+            there) and therefore never see a ring. */}
+        <AvatarRing ring={clientSpeaking ? "electric" : "gradient"} speaking={clientSpeaking} square>
+          {clientPhoto ? (
+            <img className="ts-info-avatar" src={clientPhoto} alt="" />
+          ) : (
+            <span
+              className="ts-info-avatar-initials"
+              style={{ background: client.id === ownClientId ? "var(--accent)" : clientAvatarColor(client.name) }}
+              aria-hidden="true"
+            >
+              {client.name.trim().charAt(0).toUpperCase() || "?"}
+            </span>
+          )}
+        </AvatarRing>
         {client.country && (
           <div className="ts-info-row">
             <span>{t("info.country")}</span>{" "}

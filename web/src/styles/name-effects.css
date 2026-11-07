@@ -558,9 +558,35 @@
    =========================================================================== */
 
 /* The info panel is the featured card: 14px radius in the glass sheet, and the
-   ring has to follow it. */
+   ring has to follow it. It also keeps its own scrolling — the ring is drawn
+   inside the panel's box (inset: 0), so the utility's `overflow: visible` is
+   not needed here and would have made a long panel spill instead of scroll. */
 .ts-app.ts-design-glass .ts-info-panel.chips-electric-border {
   border-radius: 14px;
+  overflow-y: auto;
+}
+
+/* Stand-in for a client who never uploaded a photo: the ring needs a host.
+   Only the glass design draws it — the other layouts keep their photo-only
+   panel, which is also why the ring never appears there. */
+.ts-info-avatar-initials {
+  display: none;
+}
+
+.ts-app.ts-design-glass .ts-info-avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: oklch(0.18 0.02 258);
+  margin: 0.2rem 0 0.4rem;
+  user-select: none;
 }
 
 /* Its avatar is a 16px-radius square, not a circle, and it is a block in the
