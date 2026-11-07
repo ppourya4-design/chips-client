@@ -434,6 +434,15 @@ test — 10 tests, all green.
 ### Weight
 
 No dependency was added or changed; `web/package.json`, both lockfiles, `connector/`, `gateway/`
-and `tsclientlib/` are byte-identical to `main`. The bundle got marginally smaller: the app CSS
-drops from 51,790 to 51,492 bytes because the dead popover keyframes are gone, the app JS stays at
-403,049 bytes (the new bridge code plus one event case).
+and `tsclientlib/` are byte-identical to `main`. Measured by building `main` and this branch side by
+side with the same toolchain:
+
+| Asset | `main` | this branch | Δ |
+|---|---|---|---|
+| `App-*.js` | 402,189 B (101.51 kB gz) | 403,049 B (101.72 kB gz) | +860 B / +0.21 kB gz |
+| `App-*.css` | 51,790 B (8.91 kB gz) | 51,492 B (8.86 kB gz) | −298 B / −0.05 kB gz |
+| `index-*.js`, `index-*.css` | 533,875 / 74,872 B | 533,875 / 74,872 B | unchanged |
+
+The JS delta is the bridge plumbing (+ description in the snapshot, the event mapping, the
+`setdescription` command, the in-place client patch); the CSS shrank because the dead popover
+keyframes are gone.
