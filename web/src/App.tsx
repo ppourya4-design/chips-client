@@ -13983,7 +13983,8 @@ function AppInner() {
                   reduceMotion={reduceMotion}
                   onReduceMotionChange={handleReduceMotionChange}
                 />
-                <label className="ts-options-checkbox">
+                {designTheme === "standard" && !activeCustomTheme && (
+                  <label className="ts-options-checkbox">
                   <input
                     type="checkbox"
                     checked={theme === "dark"}
@@ -13997,9 +13998,11 @@ function AppInner() {
                   />
                   Dark appearance
                 </label>
+                )}
                 <h4>Accent</h4>
                 <AccentSwitcher accent={accent} onChange={handleAccentChange} />
-                <label className="ts-dialog-field">
+                {designTheme === "glass" && !activeCustomTheme && (
+                  <label className="ts-dialog-field">
                   Liquid Glass intensity
                   <select
                     value={glassIntensity}
@@ -14013,6 +14016,7 @@ function AppInner() {
                     <option value="1">Full</option>
                   </select>
                 </label>
+                )}
                 <label>
                   Name-style default
                   <select

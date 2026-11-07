@@ -537,7 +537,7 @@ filter pass. The bundle remains approximately 400–406 kB App JS / 102–103 kB
 
 Local Linux gates: `npm run build --prefix web` succeeds; `npm run lint --prefix web` has
 **0 errors / the same 11 inherited warnings**; `gateway/node_modules/.bin/tsx --test
-web/tests/*.test.ts` passes **17/17**. Windows CI now also runs `settings-hub.test.ts` alongside
+web/tests/*.test.ts` passes **18/18**. Windows CI now also runs `settings-hub.test.ts` alongside
 the desktop bridge and motion-policy tests. New coverage exercises saved binding reload/clear,
 invalid storage, glass-value validation, six-section/single-entry structure, removal of toolbar
 preferences, child-modal visibility, the Step 7 placeholder, device/default/VAD persistence
@@ -551,3 +551,8 @@ VAD/PTT/mute/deafen (especially restoring a previously muted mic), sound events 
 on/off against the real server. As in Step 5, a green installer build proves compilation and
 packaging, not live server/voice, WebView rendering or runtime traffic. The final PR/report
 links the exact final-commit Windows run and **Chips-win-x64** artifact. Stop after Step 6.
+
+Final honesty pass: light/dark is shown only for the built-in Standard layout (the other
+built-ins deliberately use fixed dark palettes), and glass intensity is shown only for the
+built-in Liquid Glass layout. Both choices are retained while using another layout, but no
+ineffective control is displayed there. This visibility rule is covered by the 18th test.

@@ -78,3 +78,9 @@ test("deafen uses the existing mute commands and restores the previous input sta
   assert.match(handler, /type: "setOutputMuted", muted: deafening/);
   assert.match(app, /onClick=\{handleToggleDeafen\}[^>]*aria-label="Toggle deafen"/);
 });
+
+
+test("layout-specific appearance controls are hidden where they would do nothing", () => {
+  assert.match(app, /designTheme === "standard" && !activeCustomTheme/);
+  assert.match(app, /designTheme === "glass" && !activeCustomTheme/);
+});
