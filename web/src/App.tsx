@@ -42,6 +42,7 @@ import {
 } from "./nameEffects";
 import { loadProfileStyle, saveProfileStyle, exportStylesJson, importStylesJson, parseStyleToken, encodeStyleToken, replaceStyleToken, type ProfileStyle } from "./profileStyle";
 import { chipsImageIdFromMessage, loadMediaTokenOverride, mediaUploadEnabled, mediaUrl, saveMediaTokenOverride, uploadMedia } from "./media";
+import { createDescriptionSync, type DescriptionSync } from "./descSync";
 import { ShareSession, loadPeerId, type PublishState as SharePublishState, type SharerInfo, type ViewState as ShareViewState } from "./screenShare";
 
 const FOCUSABLE =
@@ -12924,17 +12925,27 @@ function AppInner() {
     }
   };
 
+  // Every own-description write funnels through this throttle: TeaSpeak
+  // flood-protects clientedit (BanFlooding errors, then the server closes the
+  // connection), while the profile editor streams a change per tweak and the
+  // snapshot sync below re-checks the token on every server snapshot.
+  const descSyncRef = useRef<DescriptionSync | null>(null);
+  if (!descSyncRef.current) {
+    descSyncRef.current = createDescriptionSync((description) =>
+      socketRef.current?.send(JSON.stringify({ type: "setDescription", description })),
+    );
+  }
+  const sendDescription = (description: string) => descSyncRef.current?.request(description);
+  useEffect(() => {
+    if (!connected) descSyncRef.current?.reset();
+  }, [connected]);
+
   const syncProfileToken = (description: string) => {
     const token = encodeStyleToken(profileStyle);
     if (description.match(/\[s:v1;[^\]]*\]/)?.[0] !== token)
-      socketRef.current?.send(
-        JSON.stringify({
-          type: "setDescription",
-          description: replaceStyleToken(description, token),
-        }),
-      );
+      sendDescription(replaceStyleToken(description, token));
   };
-  const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); const own = clients.find(c => c.id === ownClientId); if (connected && own) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(own.description ?? "", encodeStyleToken(next)) })); };
+  const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); const own = clients.find(c => c.id === ownClientId); if (connected && own) sendDescription(replaceStyleToken(own.description ?? "", encodeStyleToken(next))); };
   // "Reduce animations": the in-app switch, on top of the OS preference that the
   // stylesheet already honours. Freezes every Step 3 effect to a static gradient.
   const [reduceMotion, setReduceMotion] = useState<boolean>(loadReduceMotion);
