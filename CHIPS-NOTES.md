@@ -172,3 +172,173 @@ Defence in depth that is now in place:
 - A desktop-only navigation guard in `web/src/main.tsx`: clicks on non-bundle links are prevented and copied, and injected `<base>` elements are removed, so the WebView cannot be steered to a third-party origin after load.
 
 **Honest limits.** This is a source audit plus the CSP/capability argument; no packet capture of the installed Windows build was possible from this Linux sandbox. It should still be confirmed once with a network monitor on a real Windows machine (connect to `wwts.ir:1694`, idle, then start a stream) before the claim is treated as verified at runtime. The connector and `tsclientlib` were not modified, per the black-box rule.
+
+## Step 3 — The animation system (house style)
+
+Motion in Chips is light moving across static elements. Letters and elements never move: no
+wave, no bounce, no wiggle, no jumping scale. Step 2 enforced that with a global
+`animation: none !important`; Step 3 turns that ban into an allow-list and adds the effects.
+
+**The three permitted animations.** Keyframes in `web/src/styles/name-effects.css` may only
+animate `background-position`, the registered `--spark-pos` angle, and the opacity of a light
+layer. Every keyframe in the file is one of those three shapes; no keyframe mentions
+`transform`, `translate`, `rotate`, `scale` or `filter`. `text-shadow` stays banned globally.
+There is no glow: every light here is a crisp gradient stop (the spark's "white-hot" core is
+`rgba(180, 240, 255, 0.9)` as a hard stop, not a blur), and no layer adds a drop-shadow.
+
+**How the ban became an allow-list.** `web/src/index.css` now exempts exactly the elements the
+system marks with `[data-chips-anim]`:
+
+```css
+*:not([data-chips-anim]),
+*:not([data-chips-anim])::before,
+*:not([data-chips-anim])::after { animation: none !important; }
+```
+
+Everything else in the app — upstream's legacy animations, user CSS, future code — still
+animates nothing. The flag is on the light layer itself, never on a container, so it cannot be
+inherited by in-between elements.
+
+**Files.**
+
+| File | Role |
+|---|---|
+| `web/src/styles/name-effects.css` | The whole system: `@property --spark-pos`, the keyframes, name styles, electric border, avatar rings, reduced motion. ~21 KB raw / 5.4 KB gzipped. |
+| `web/src/nameEffects.ts` | Effect *definitions* and the attribute builder. No React, no rendering: the catalog, the saved choice, the reduced-motion preference. Step 4 imports this. |
+| `web/src/App.tsx` | Thin wiring only: `<NamePlate>`, `<AvatarRing>`, the `NameStyleContext`, the Reduce-animations switch. |
+
+No library, no runtime animation framework: pure CSS plus a few hundred bytes of JS.
+
+### Name styles (the catalog)
+
+Applied as `.chips-name[data-name-style="…"]`. All five definitions live in `NAME_STYLES` in
+`web/src/nameEffects.ts` with their label, description, colour-slot count, duration and whether
+they animate at all — Step 4's picker renders straight from that array.
+
+| id | What it does | Colours | Loop |
+|---|---|---|---|
+| `solid` | Flat colour. No light layer, no animation. | `--name-c1` | static |
+| `shimmer` | Metal shimmer across static glyphs (`linear-gradient(120deg, …)`, `background-size: 200% auto`, `background-position` 200% → -200%) plus a shine-sweep `::after` (`linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.85) 50%, transparent 70%)`). | `--name-c1`, `--name-c2` | 3s linear |
+| `crystal` | Flat colour plus one crisp sweep per cycle, then a long calm hold. | `--name-c1` | 6s ease-in-out |
+| `prism` | Five colours through the same shimmer, slower and wider. | `--name-c1` … `--name-c5` | 6s linear |
+| `talking` | Signature effect: the shimmer keeps running, and while the owner speaks a second gradient set cross-fades in on a `::before` light layer (opacity only). It eases back over 320 ms when they stop. | `--name-c1/c2` + `--name-v1/v2` | 3s linear |
+
+Markup contract, built by `namePlateAttributes(config, text, speaking)`:
+
+```html
+<span class="chips-name" data-name-style="shimmer" data-text="Pourya"
+      data-speaking="0" data-chips-anim style="--name-c1: …">Pourya</span>
+```
+
+`data-text` is what the sweep and the voice layer paint (`content: attr(data-text)`), so the
+overlays always sit exactly on the letters. `data-speaking` is the client's existing voice
+signal — the same gated `talkers` boolean the talk lamp and `ts-talking` row already use.
+
+**One deliberate deviation.** The brief's shimmer recipe is `--primary` → `--accent` → `--primary`,
+but Step 2's accent switcher points `--primary` and `--accent` at the *same* hex, so that recipe
+would render a flat bar with nothing travelling through it. The stylesheet therefore keeps the
+same 120°/25%/50%/75%/100% structure but defaults the second slot to a lit tint of the accent
+(`color-mix(in srgb, var(--accent) 55%, #ffffff)`); both slots are overridable through
+`--name-c1` / `--name-c2`, which is what Step 4 will write. Nothing else about the recipe
+changed.
+
+### Electric Border (cards / featured elements)
+
+`.chips-electric-border` on the card: `position: relative`, `overflow: visible`, and the ring is
+a `::before`/`::after` pair using the mask-composite trick (`padding: 2px` + `mask:
+linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)` + `mask-composite: exclude`,
+`border-radius: inherit`, so the ring always matches the card). The gradient is a conic gradient
+`from var(--spark-pos)` with a spark segment — primary at 0.7 alpha → `rgba(180,240,255,0.9)`
+white-hot core → primary 0.7 → transparent — and `--spark-pos` runs 0deg → 360deg in 2.5s
+linear. A second, identical ring carries `animation-delay: -1.25s`, so two sparks chase the rim.
+
+`.chips-electric-border--quiet` is the calm variant: a 1px rim with a slow sheen band
+(`linear-gradient(115deg, …)`, `background-size: 300% 300%`, 14s linear) and no second ring.
+
+The card must carry `data-chips-anim` — that is the motion-policy opt-in, and the stylesheet
+cannot animate without it.
+
+### Avatar rings
+
+`.chips-avatar[data-ring="…"]` is a host span around whatever draws the avatar (an `<img>` or
+the initials tile), so the ring is drawn on the host's pseudo-elements and the avatar element
+itself is untouched. 2px masked rim, 3px outside the avatar, radius inherited (circle by
+default, `chips-avatar-square` for the info panel's 16px-radius photo).
+
+| `data-ring` | What it does |
+|---|---|
+| `gradient` | Conic gradient turning slowly around the avatar, one lap per 8s (`--spark-pos`). |
+| `speaking` | A still specular rim whose brightness follows voice activity: 0.45 opacity idle, 1 while speaking, with a gentle 1.8s opacity-only pulse. Smooth 240 ms easing, no scale change. |
+| `electric` | Effect 2 in small format: two sparks, 2.5s, second delayed -1.25s. |
+
+Every variant also lifts its specular edge when `data-speaking="1"`.
+**Banned and not implemented:** orbiting particles, floating dots, or any decoration that moves
+around an avatar or a name. There is no such code and no definition for it in the catalog.
+
+### Reduced motion
+
+Two triggers, identical result — everything freezes to a still gradient:
+
+- `@media (prefers-reduced-motion: reduce)`;
+- the in-app **Options → Design → Motion → “Reduce animations”** switch, persisted in
+  `localStorage` (`chips:reduce-motion`) and applied as `chips-reduce-motion` on the app root
+  (plus `data-motion="reduced"`). Without a stored choice the switch starts from the OS
+  preference.
+
+Frozen state: the shimmer keeps its gradient but stops travelling, the sweep layer is removed
+entirely (a frozen white band across a name is a smudge, not light), the sparks hold at 0deg,
+and the transformed transitions are disabled. Talking-reactive keeps its second gradient as a
+*state colour* — the name still tells you the user is speaking — but it flips instantly and its
+overlay does not travel.
+
+### Where it is wired today
+
+The effect system is scoped to the Liquid Glass design (`.ts-app.ts-design-glass`); the legacy
+Standard/Nova/Pulse/IDE layouts keep their flat look and never animate, even where their markup
+now carries the attributes.
+
+- **Channel tree** — the local user's row (the highlighted `ts-self` row, which is the glass
+  layout's self bar) renders through `<NamePlate premium>`, so it carries the saved style and
+  the voice signal. Every other row keeps the plain flat label: the client cannot know which
+  style another user picked, and a tree full of shimmering names would be a light show, not a
+  premium name style.
+- **Info panel** — the featured card gets `.chips-electric-border` (spark variant) when a client
+  is selected and `.chips-electric-border--quiet` for the calmer server/channel views. The
+  selected client's photo gets the electric ring while they speak and the slow gradient ring
+  when they are quiet; the local user's own name in that card uses the chosen style.
+- **Speaking strip** (Pulse/IDE) — avatar rings and the premium plate for the local user. The
+  strip only exists in those legacy layouts, so the effect classes are inert there today; the
+  wiring is in place for when those layouts adopt the system.
+- **Not wired:** chat lines. A plate per message would mean one animated light layer per own
+  message; the effect belongs on identity surfaces, not on a scrolling log.
+
+### How Step 4's panel and profile card select an effect
+
+Nothing about the picker exists yet — that is Step 4. The contract it will use:
+
+1. Render the choices from `NAME_STYLES` (already ordered, labelled and described) and
+   `AVATAR_RINGS`.
+2. Keep the selection in a `NameStyleConfig` (`{ style, colors, voiceColors }`), persist it with
+   `saveNameStyleConfig()`, read it back with `loadNameStyleConfig()` (key `chips:name-style`).
+3. Preview and apply with the existing components — `<NamePlate text premium speaking>` inside
+   the app, or `namePlateAttributes(config, text, speaking)` / `avatarRingAttributes(ring,
+   speaking)` on any element. The colour slots are `--name-c1` … `--name-c5` (max 5) and
+   `--name-v1` / `--name-v2` (talking-reactive), so a colour picker only writes hex strings.
+4. To make the choice live, hold it in `AppInner` and put the setter next to the existing
+   `useState<NameStyleConfig>(loadNameStyleConfig)`; `NameStyleContext` already distributes it to
+   the tree, the info panel and the speaking strip. The profile card is just
+   `<NamePlate premium>` on a larger type scale plus an `<AvatarRing>` — no separate CSS.
+
+### Weight and honesty
+
+- Budget: +21 KB raw / +5.4 KB gzipped CSS and a negligible JS delta (effect definitions and one
+  React component). No animation library, no canvas, no request, no new dependency.
+- `@property` is required for the sparks to travel; where a WebView does not support registered
+  custom properties the spark simply holds still at 0deg. The name shimmer, the sweep and the
+  opacity fades do not depend on it.
+- Not verified on Windows: this sandbox has no browser engine and no Windows host. The claims
+  above are a source-level audit plus the web build; the visual result, the cost of the extra
+  compositing on WebView2, and the ring geometry around real avatars still need one look on a
+  real Windows machine.
+- The connector, `tsclientlib` and the gateway are untouched. No telemetry, no new network path,
+  no external asset. The app name stays Chips and the preset `wwts.ir:1694` is unchanged.
