@@ -42,6 +42,10 @@ function versionManifest(): Plugin {
 export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(buildId),
+    // Chips media endpoint upload token, injected at build time from the
+    // CHIPS_UPLOAD_TOKEN secret (never committed). Empty string when the
+    // secret is absent — uploads then rely on the user's Settings token.
+    __CHIPS_UPLOAD_TOKEN__: JSON.stringify(process.env.CHIPS_UPLOAD_TOKEN ?? process.env.VITE_CHIPS_UPLOAD_TOKEN ?? ""),
   },
   plugins: [
     react(),
