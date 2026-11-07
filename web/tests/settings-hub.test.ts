@@ -53,10 +53,14 @@ test("one six-section settings hub, reachable from the self-bar", () => {
   assert.doesNotMatch(app, /t\("menu\.extras\.options"\)|ts-connect-nova-settings/);
 });
 
-test("hub child panels do not sit behind the hub, and Step 7 is only a placeholder", () => {
+test("hub child panels do not sit behind the hub, and theme files live in Appearance", () => {
   assert.match(app, /optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && !changeNicknameOpen/);
-  assert.match(app, /Theme files — Step 7 \(not implemented\)/);
-  assert.doesNotMatch(app, /accept="[^"]*chipstheme/);
+  // Step 7 replaced the placeholder with the real panel in Settings -> Appearance.
+  assert.doesNotMatch(app, /Step 7 \(not implemented\)/);
+  assert.match(app, /<ThemeFilePanel/);
+  const panel = readFileSync(new URL("../src/ThemeFilePanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /accept="\.chipstheme,application\/json"/);
+  assert.match(panel, /formatSectionTheme|onImport|importThemeFile/);
   assert.match(app, /chips-profile-editor/);
   assert.match(css, /\.chips-profile-editor[^}]*overflow:auto/);
 });

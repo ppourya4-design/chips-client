@@ -32,6 +32,9 @@ WebView2, and the TeamSpeak protocol lives in a Rust process that ships next to 
   [`CHIPS-NOTES.md`](CHIPS-NOTES.md#no-calls-home-audit-closes-the-open-step-1-item).
 - **A visual identity of its own.** Liquid Glass surfaces, a name/avatar effect system where
   *light moves and letters never do*, and no glow anywhere (no bloom, no neon, no orbiting dots).
+- **Themes are files, not code.** A `.chipstheme` is one JSON manifest of design-token values —
+  no CSS, no scripts, no links. Import and export live in Settings → Appearance, and the
+  [theme-making kit](docs/theme-kit/) shows how to build one (or have an AI build one).
 - **The server address `wwts.ir:1694` is pre-filled** in the connect dialog. Nothing
   auto-connects: you choose the nickname and press Connect.
 
@@ -171,6 +174,7 @@ upstream instructions, environment variables and limitations are preserved in
 |---|---|
 | [`CHIPS-NOTES.md`](CHIPS-NOTES.md) | Recon, the Liquid Glass design system, the animation law, the profile/description-token design, the no-calls-home audit, and the Step 5 QA report. |
 | [`docs/webspeak3-upstream-readme.md`](docs/webspeak3-upstream-readme.md) | Upstream WebSpeak3 README: web/Docker deployment, gateway environment variables, browser support. |
+| [`docs/theme-kit/`](docs/theme-kit/) | The `.chipstheme` theme-making kit: `starter.chipstheme`, the Persian `tutorial.md`, an English `token-reference.md` and a ready-to-paste `ai-prompt.md`. |
 | [`docs/teaspeak.md`](docs/teaspeak.md) | TeaSpeak compatibility notes (upstream). |
 | [`ROADMAP.md`](ROADMAP.md) | Upstream product roadmap. |
 

@@ -766,3 +766,159 @@ CSP, dependency or lockfile changes. No merge and no Step 7 work.
 Final overflow audit also replaces the legacy multi-server tab horizontal scroller with
 wrapped, vertically scrollable tabs (76px cap), and bounds auxiliary profile/notification/
 transfer scrolling horizontally. This adds one source-contract test, not runtime proof.
+
+## Step 7 — `.chipstheme` theme files and the theme-making kit
+
+Step 7 replaces the Step 6 placeholder in **Settings → Appearance** with a real,
+token-only theme-file feature. Nothing in the connector, the gateway,
+`tsclientlib`, the Tauri host, the CSP or the dependency set changed; a theme
+file cannot reach any of them.
+
+### The format (final, as implemented)
+
+A `.chipstheme` file is **one JSON object**. Seven top-level fields, no more:
+
+```json
+{
+  "format": "chipstheme",
+  "version": 1,
+  "name": "Name (1–48 chars)",
+  "author": "Author (1–48 chars)",
+  "description": "optional (≤160 chars)",
+  "base": "glass",
+  "tokens": { "color.accent": "#a74cfd", "glass.blur": 24 }
+}
+```
+
+`tokens` holds **design-token values only**. Every key is one of the 36 tokens
+in `web/src/themeFile.ts` → `THEME_TOKENS`; each writes custom properties that
+the Liquid Glass stylesheet already declares. There is no token for CSS,
+scripts, HTML, URLs, external fonts or images, shadows, glow, animations,
+layout or behaviour — so those cannot be expressed at all.
+
+| Group | Tokens | Notes |
+|---|---|---|
+| Colours (page, glass, light, accent, text, status, controls, log) | 28 | `colour` = `#rrggbb` / `#rgb` / `rgba(r,g,b,a)` (a 0–1) / `transparent`. `color.accent` must be **hex**: Chips derives `--primary-rgb`, `--accent-rgb`, `--primary-dim` and (unless the file sets it) `--accent-contrast` from it, exactly as the accent switcher does. |
+| Glass | `glass.blur` 0–60 px, `glass.saturate` 100–250 %, `glass.radius` 0–32 px, `controls.radius` 0–999 px | Same values the intensity selector uses (0 = Off, 10/120 = Subtle). |
+| Type | `font.family` ∈ `plus-jakarta-sans` \| `manrope` \| `vazirmatn` \| `vt323` (the bundled OFL families only), `font.size` 11–18 px | The glass sheet's `font-family`/`font-size` now read `--font-ui` / `--ui-font-size`, so a theme reaches the interface type without a font download. |
+
+Numeric tokens are plain JSON numbers (no strings, no units). The full table with
+type, range and default is `docs/theme-kit/token-reference.md`, generated from
+the same array and test-checked against it.
+
+Two tokens were added to the surfaces that already existed as literal CSS
+values (`color.toolbar`/`color.toolbarAlt` cover upstream's `--bg-toolbar-1/2`).
+Four custom properties remain `var()` aliases of themed tokens
+(`--input-text`, `--self-text`, `--log-text`, `--log-error`); the drift test
+asserts that these four are the *only* themed properties the schema does not
+own directly.
+
+### Validation rules (strict, and they never half-apply)
+
+`validateThemeFile(text)` returns English errors; `importThemeFile()` is pure
+(reads the installed list, mutates and persists nothing). The UI applies a
+theme **only** when validation returned no errors, so a rejected file leaves the
+installed themes, the selection and the applied look untouched.
+
+- not JSON / not an object / empty / >64 KB → refused;
+- `format` ≠ `"chipstheme"`, `version` ≠ `1` (a higher number gets an
+  "update Chips" message), `base` ≠ `"glass"` → refused;
+- any **unknown top-level field** (e.g. `css`, `script`, `url`) → refused, so a
+  file cannot smuggle in code that is merely ignored;
+- any **unknown token** → refused (not silently ignored), with a pointer to the
+  token reference, so a typo cannot look like it worked;
+- wrong type or out-of-range value → refused with the range in the message;
+- `name`/`author` must be text, 1–48 chars, no control characters;
+- no valid token at all → refused ("would not change anything");
+- 32 imported themes is the cap (the list is refused, not truncated).
+
+### Import / export / removal
+
+- **Import**: file picker (`accept=".chipstheme,application/json"`), strict
+  validation, applied immediately on success, persisted in `chips:themes`, and
+  listed next to the built-ins with its author. Failures render as a red,
+  English error block and change nothing.
+- **Export the current look**: name / author / description are editable; the
+  file is written from `resolveThemeTokens(activeTheme, liveAccent)` — the
+  built-in base, then the active theme's own tokens, then the live accent — so
+  an export is always complete and re-imports to the same look. The author is
+  remembered in `chips:theme-author`.
+- **Remove**: imported themes only, with a confirm. Built-ins have no remove
+  control and the handler only ever filters imported ids; removing the active
+  theme falls back to the current built-in accent.
+- Selecting a **built-in** theme writes the existing `chips:accent` key (so the
+  toolbar swatches and the Appearance list cannot disagree), and picking a
+  swatch selects the matching built-in theme again. If a stored `file:` id no
+  longer resolves (cleared storage), the app falls back to the built-in look
+  instead of a dangling selection.
+
+### Built-in themes
+
+Only the owner's four Liquid Glass accents, defined in code, not as files:
+`accent:cyan` `#74e5ff` (default), `accent:purple` `#a74cfd`, `accent:red`
+`#fd1d1d`, `accent:blue` `#1a56db`. No third-party/fun themes are bundled — no
+Dark Souls, no Windows XP, nothing built on someone else's IP. Those are meant
+to ship later as standalone `.chipstheme` files, which the format already
+supports (any file with a valid manifest imports into that list).
+
+The tokens are written as inline custom properties on the app root, so they also
+reach the legacy Standard/Nova/Pulse/IDE layouts if the user switches to one —
+they override that layout's own palette values but change nothing structural.
+The supported combination is Liquid Glass + a theme file.
+
+### The theme-making kit — `docs/theme-kit/`
+
+| File | Contents |
+|---|---|
+| `starter.chipstheme` | Minimal valid template: all 36 tokens present in schema order, every value at its default, so editing one line is a complete introduction. JSON has no comments; naming and order carry the meaning, and the tutorial explains each group. Tested to equal the defaults exactly. |
+| `tutorial.md` | Persian, short, friendly. What a `.chipstheme` is, how to import, how to edit the starter, what each token group does, the safety rules, export/sharing, and the AI workflow. Token names and values stay English. |
+| `ai-prompt.md` | Ready-to-paste prompt: Persian framing, then English hard rules plus the generated 36-token schema with type, range, default and one-line meaning, and a "describe the vibe" slot with four short examples. |
+| `token-reference.md` | Generated from `THEME_TOKENS` (script kept out of the repo, table mirrored in the test): every token with type, allowed range/format and default, plus the accent derivation and the font list. |
+
+`web/tests/theme-file.test.ts` fails if the docs drift from the schema: the
+reference must list exactly the schema's tokens with their defaults and ranges,
+the starter must carry every token at its default, the AI prompt must embed
+every token and font, and the tutorial must be Persian and name the kit files.
+
+### Standing rules
+
+- Themes **cannot introduce glow**: there is no glow/shadow/bloom/halo token,
+  and a test asserts no token name or custom property mentions one. The only
+  light remains the crisp specular edge.
+- The animation law is untouched: a theme sets no keyframes and cannot opt
+  elements into motion; the panel adds no animation. `motion-policy.test.ts`
+  still passes unchanged.
+- English/LTR interface, vector icons only (`UiIcon` trash icon), no new
+  dependency, no native capability, no CSP or network change. A theme is inline
+  custom properties on the app root — never a stylesheet, never HTML.
+
+### Tests, build and weight
+
+- **77/77 tests pass.** New `theme-file.test.ts` (31 tests): valid import,
+  starter/reference/prompt/tutorial drift, hex/rgba normalisation, and rejection
+  of malformed JSON, wrong format/version/base, unknown top-level fields,
+  unknown tokens, out-of-range and mistyped values, bad meta fields, oversized
+  files — each re-checked to leave the stored theme list and active id
+  byte-identical; plus export round-trip, accent contrast, file naming, storage
+  fallbacks, the 32-theme cap and the built-in/placeholder wiring.
+- Production `tsc -b && vite build` passes; `oxlint` is **0 errors / 11
+  inherited warnings** (one new file, no new warnings).
+- Weight, measured by building `main` and this branch with the same toolchain:
+
+  | Asset | `main` | this branch | Δ |
+  |---|---|---|---|
+  | `App-*.js` | 411,635 B (105.08 kB gz) | 431,628 B (111.18 kB gz) | +19,993 B / +6.10 kB gz |
+  | `App-*.css` | 56,402 B (9.83 kB gz) | 56,474 B (9.85 kB gz) | +72 B |
+  | `index-*` | unchanged | unchanged | 0 |
+
+  That is the whole schema, validator, panel, storage and CSS. No new package,
+  no new process, no added animation, no extra filter pass.
+
+Honest limits: the theme list, import/export, error rendering and live
+application were exercised by Node tests against the real modules and source
+contracts, **not** in a browser or on Windows. A rejected-file import was
+verified at the storage-state level; the file picker itself needs one click on a
+real Windows desktop.
+
+This is the last step of the current pipeline; no image-chat or screen-share
+work was started, and the PR is not merged.

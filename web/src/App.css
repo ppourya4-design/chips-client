@@ -5019,3 +5019,99 @@ input.ts-identities-uid {
 .chips-self-avatar :is(img, .ts-client-avatar) { width:32px; height:32px; border-radius:50%; object-fit:cover; }
 
 .chips-ui-icon { display:inline-block; width:1.1em; height:1.1em; flex-shrink:0; vertical-align:-0.15em; pointer-events:none; }
+
+/* Step 7: .chipstheme list in Settings -> Appearance. Plain rows, no new
+   animation, no glow — a swatch and two buttons per theme. */
+.chips-theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0.5rem 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.chips-theme-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chips-theme-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chips-theme-pick:hover {
+  background: var(--row-hover);
+  border-color: var(--border);
+}
+
+.chips-theme-pick-active {
+  border-color: var(--accent);
+}
+
+.chips-theme-swatch {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+
+.chips-theme-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chips-theme-tag {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.chips-theme-remove {
+  flex-shrink: 0;
+  width: 30px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chips-theme-remove:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.chips-theme-errors {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.chips-theme-errors ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.chips-theme-errors li {
+  margin-bottom: 2px;
+}

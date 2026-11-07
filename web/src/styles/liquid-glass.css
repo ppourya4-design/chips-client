@@ -178,8 +178,13 @@
   --alpha-badge: #f2b96a;
 
   color-scheme: dark;
-  font-family: "Plus Jakarta Sans", "Vazirmatn", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 13px;
+  /* Type is two design tokens (font.family / font.size in a .chipstheme). The
+     default stack is the bundled Plus Jakarta Sans with Vazirmatn behind it for
+     Persian *user content*; a theme may only name another bundled family. */
+  --font-ui: "Plus Jakarta Sans", "Vazirmatn", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ui-font-size: 13px;
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
   letter-spacing: 0.005em;
 
   /* The page itself: a still, near-black backdrop with one very soft vertical
