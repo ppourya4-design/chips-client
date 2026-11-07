@@ -346,3 +346,11 @@ Nothing about the picker exists yet — that is Step 4. The contract it will use
   real Windows machine.
 - The connector, `tsclientlib` and the gateway are untouched. No telemetry, no new network path,
   no external asset. The app name stays Chips and the preset `wwts.ir:1694` is unchanged.
+
+## Step 4 — profile style token foundation
+
+Added `web/src/profileStyle.ts` as the shared local style/token codec. Local data is stored under `chips:profile-style`; `styles.json` payloads use `{ "version": 1, "style": … }` and are handled by `exportStylesJson` / `importStylesJson`.
+
+Token grammar: `[s:v1;key=value;…]`. `fx` is one of `solid|shimmer|crystal|prism|talking`; `c1` and `c2` are six-digit lowercase hex name colours (without `#`); `ring` is `gradient|speaking|electric`; `talk` is `0|1`; `bg` is comma-separated 2–3 six-digit hex banner stops; `dir` is an integer degree direction; `card` is two comma-separated six-digit hex card colours. Optional `xp` is a nonnegative number and is intentionally absent until an external integration supplies it; no XP value is inferred by this client. Parsing is defensive and unknown/malformed values fall back to defaults. `replaceStyleToken` preserves non-token description text and replaces the existing v1 token in place.
+
+**Not yet implemented in this step foundation:** description read/write transport, profile card, customization UI, group categorization, image selection, and applying the codec to live clients. Connector snapshot/events remain unchanged; the current connector's client snapshot does not expose description. Consequently this codec alone does not complete Step 4 and must not be treated as live synchronization. XP-ladder group names and categorization require an agreed server group mapping; do not infer ranks or XP from group IDs.
