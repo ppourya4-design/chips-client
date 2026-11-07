@@ -41,6 +41,8 @@ import {
   AVATAR_RINGS,
 } from "./nameEffects";
 import { loadProfileStyle, saveProfileStyle, exportStylesJson, importStylesJson, parseStyleToken, encodeStyleToken, replaceStyleToken, type ProfileStyle } from "./profileStyle";
+import { chipsImageIdFromMessage, loadMediaTokenOverride, mediaUploadEnabled, mediaUrl, saveMediaTokenOverride, uploadMedia } from "./media";
+import { ShareSession, loadPeerId, type PublishState as SharePublishState, type SharerInfo, type ViewState as ShareViewState } from "./screenShare";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -1741,6 +1743,8 @@ function ChannelTree({
                 // Drives the Talking-reactive name and the avatar ring, nothing else.
                 const clientSpeaking =
                   talkers.has(c.id) && c.hasTalkPower && !c.inputMuted && c.inputHardwareEnabled;
+                const rowStyle = parseStyleToken(c.description ?? "");
+                const plateSrc = rowStyle?.bannerId ? mediaUrl(rowStyle.bannerId) : clientAvatarUrl(c, groupIconImages);
                 return (
                 <li key={c.id} role="none">
                   <div
@@ -1783,6 +1787,7 @@ function ChannelTree({
                     }}
                     title={tree.tooltips ? clientTooltip(c) : undefined}
                   >
+                    {plateSrc && <span className="chips-nameplate" aria-hidden="true"><StillImg still={!tree.animateAvatars} src={plateSrc} alt="" loading="lazy" /></span>}
                     <span className="ts-tree-expander ts-tree-expander-empty" aria-hidden="true">
                       <span />
                     </span>
@@ -1817,7 +1822,7 @@ function ChannelTree({
         );
       })}
     </ul>
-    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile"><UiIcon name="close" /></button><div className="chips-profile-banner" style={{background:profileClient.id===ownClientId&&loadProfileStyle().bannerImage?`center/cover url(\"${loadProfileStyle().bannerImage}\")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
+    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const ownStyle = profileClient.id===ownClientId ? loadProfileStyle() : null; const bannerId = ownStyle?.bannerId ?? style?.bannerId; const bannerSrc = bannerId ? mediaUrl(bannerId) : (ownStyle?.bannerImage ?? clientAvatarUrl(profileClient, groupIconImages)); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile"><UiIcon name="close" /></button><div className="chips-profile-banner" style={{background:bannerSrc?`center/cover url("${bannerSrc}")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
     </>
   );
 }
@@ -4593,7 +4598,16 @@ function ProfileStyleEditor({ value, onChange, onClose }: { value: ProfileStyle;
   const backdrop = useBackdropDismiss(onClose);
   const setName = (patch: Partial<NameStyleConfig>) => onChange({...value,name:{...value.name,...patch}});
   const file = (text: string) => { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download="styles.json"; a.click(); URL.revokeObjectURL(a.href); };
-  return <div className="ts-dialog-backdrop" {...backdrop}><section aria-label="Profile style" className="ts-dialog chips-profile-editor" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,bannerImage:String(r.result)});r.readAsDataURL(f);}}}/> <button onClick={()=>onChange({...value,bannerImage:undefined})}>Clear</button></p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
+  const [bannerBusy, setBannerBusy] = useState(false);
+  const pickBanner = async (f: File) => {
+    if (mediaUploadEnabled()) {
+      setBannerBusy(true);
+      try { const up = await uploadMedia(f, "banner"); onChange({...value, bannerId: up.id, bannerImage: undefined}); setBannerBusy(false); return; }
+      catch { setBannerBusy(false); }
+    }
+    const r = new FileReader(); r.onload = () => onChange({...value, bannerImage: String(r.result), bannerId: undefined}); r.readAsDataURL(f);
+  };
+  return <div className="ts-dialog-backdrop" {...backdrop}><section aria-label="Profile style" className="ts-dialog chips-profile-editor" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerId ? `center/cover url("${mediaUrl(value.bannerId)}")` : value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f)void pickBanner(f);}}/> <button onClick={()=>onChange({...value,bannerImage:undefined,bannerId:undefined})}>Clear</button>{bannerBusy ? " Uploading banner…" : value.bannerId ? " Banner shared with other Chips clients." : ""}</p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
 }
 
 function NamePlate({
@@ -8982,6 +8996,15 @@ function AppInner() {
   const [serverChat, setServerChat] = useState<ChatEntry[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const [chatUpload, setChatUpload] = useState<"idle" | "uploading" | "error">("idle");
+  const chatFileRef = useRef<HTMLInputElement>(null);
+  const shareSessionRef = useRef<ShareSession | null>(null);
+  const [sharePublish, setSharePublish] = useState<SharePublishState>("idle");
+  const [sharers, setSharers] = useState<SharerInfo[]>([]);
+  const [viewPeer, setViewPeer] = useState<string | null>(null);
+  const [viewState, setViewState] = useState<ShareViewState>("idle");
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const shareVideoRef = useRef<HTMLVideoElement>(null);
   const [pmThreads, setPmThreads] = useState<Record<number, PmThread>>({});
   const [pokes, setPokes] = useState<PokeNotice[]>([]);
   const [pokeTarget, setPokeTarget] = useState<{ id: number; name: string } | null>(null);
@@ -11781,9 +11804,7 @@ function AppInner() {
     el.style.height = `${el.scrollHeight}px`;
   }, [chatInput, designTheme, connected]);
 
-  const handleSendChat = () => {
-    const message = wrapUrls(chatInput.trim());
-    if (!message) return;
+  const sendChatText = (message: string) => {
     if (activeTab === "channel") {
       socketRef.current?.send(JSON.stringify({ type: "sendChatMessage", message }));
     } else if (activeTab === "server") {
@@ -11791,7 +11812,45 @@ function AppInner() {
     } else {
       socketRef.current?.send(JSON.stringify({ type: "sendPrivateMessage", clientId: activeTab, message }));
     }
+  };
+
+  const handleSendChat = () => {
+    const message = wrapUrls(chatInput.trim());
+    if (!message) return;
+    sendChatText(message);
     setChatInput("");
+  };
+
+  /** Upload a picked/pasted image to the Chips media host and send its URL
+   *  as the chat message. Chips clients render it inline; native TS clients
+   *  see a plain link. */
+  const handleChatImage = async (file: Blob) => {
+    if (!mediaUploadEnabled() || chatUpload === "uploading") return;
+    setChatUpload("uploading");
+    try {
+      const up = await uploadMedia(file, "chat-image");
+      sendChatText(wrapUrls(up.url));
+      setChatUpload("idle");
+    } catch {
+      setChatUpload("error");
+      window.setTimeout(() => setChatUpload("idle"), 4000);
+    }
+  };
+
+  /** One chat message body: a whole-message Chips image URL renders inline
+   *  (our own host — the generic remote-image toggle only governs foreign
+   *  [img] hosts); everything else goes through the BBCode renderer. */
+  const renderChatMessage = (message: string) => {
+    const imgId = chipsImageIdFromMessage(message);
+    if (imgId) {
+      const url = mediaUrl(imgId);
+      return (
+        <a href={url} target="_blank" rel="noreferrer">
+          <StillImg still={!treeOptions.animateImages} className="chips-chat-image" src={url} alt="" loading="lazy" />
+        </a>
+      );
+    }
+    return renderBbcode(message, { images: chatImages, stillImages: !treeOptions.animateImages });
   };
 
   const handleOpenPrivateChat = (clientId: number, clientName: string) => {
@@ -12769,6 +12828,53 @@ function AppInner() {
   const [autoConnect, setAutoConnect] = useState(
     () => localStorage.getItem("chips:auto-connect") === "on",
   );
+  const [mediaTokenOverride, setMediaTokenOverride] = useState(loadMediaTokenOverride);
+  // Screen share (Step B): one signaling session per joined channel. The
+  // session lives entirely on the media host's relay + P2P WebRTC; it is
+  // recreated when the channel changes and torn down on disconnect.
+  const shareChannel = ownClient?.channel;
+  useEffect(() => {
+    if (!connected || shareChannel == null || !mediaUploadEnabled()) return;
+    const session = new ShareSession({
+      channelId: shareChannel,
+      peerId: loadPeerId(),
+      name: ownClient?.name ?? nickname,
+      uid: ownClient?.uid ?? "",
+      events: {
+        onPublishState: setSharePublish,
+        onSharers: setSharers,
+        onViewState: (peerId, state) => {
+          setViewState(state);
+          if (state === "idle") setViewPeer((cur) => (cur === peerId ? null : cur));
+        },
+        onRemoteStream: (peerId, stream) => {
+          setRemoteStream(stream);
+          if (stream) setViewPeer(peerId);
+        },
+      },
+    });
+    shareSessionRef.current = session;
+    session.start();
+    return () => {
+      session.dispose();
+      shareSessionRef.current = null;
+      setSharers([]);
+      setRemoteStream(null);
+      setViewPeer(null);
+      setViewState("idle");
+      setSharePublish("idle");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, shareChannel]);
+  useEffect(() => {
+    if (shareVideoRef.current) shareVideoRef.current.srcObject = remoteStream;
+  }, [remoteStream, viewPeer, viewState]);
+  const toggleShare = () => {
+    const session = shareSessionRef.current;
+    if (!session) return;
+    if (sharePublish === "sharing") session.stopPublishing();
+    else void session.startPublishing().catch(() => { /* picker cancelled */ });
+  };
   const [glassIntensity, setGlassIntensity] =
     useState<string>(loadGlassIntensity);
   const [muteBinding, setMuteBinding] = useState<PttBinding | null>(() =>
@@ -13957,6 +14063,19 @@ function AppInner() {
                   />
                   Auto-connect on launch
                 </label>
+                <label className="ts-dialog-field">
+                  Media token
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    placeholder={mediaTokenOverride ? "" : "Needed to send images and banners"}
+                    value={mediaTokenOverride}
+                    onChange={(e) => {
+                      setMediaTokenOverride(e.target.value);
+                      saveMediaTokenOverride(e.target.value);
+                    }}
+                  />
+                </label>
                 <p>
                   Connection changes apply on the next connection. Passwords are entered
                   in Connect.
@@ -14829,6 +14948,35 @@ function AppInner() {
               onContextMenu={handleClientContextMenu}
             />
           )}
+          {sharers.some((s) => s.sharing) && (
+            <div className="chips-share-strip">
+              {sharers.filter((s) => s.sharing).map((s) => (
+                <span key={s.peerId} className="chips-share-strip-item">
+                  <UiIcon name="screen" /> {s.name} is sharing their screen
+                  {viewPeer === s.peerId ? (
+                    <button onClick={() => shareSessionRef.current?.stopViewing()}>Stop watching</button>
+                  ) : (
+                    <button onClick={() => shareSessionRef.current?.watch(s.peerId)}>Watch</button>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+          {viewPeer && viewState !== "idle" && (
+            <div className="chips-share-view">
+              <div className="chips-share-view-head">
+                <span>
+                  {sharers.find((s) => s.peerId === viewPeer)?.name ?? "Screen share"}
+                  {viewState === "connecting" && " — connecting…"}
+                  {viewState === "reconnecting" && " — reconnecting…"}
+                  {viewState === "failed" && " — connection failed"}
+                  {viewState === "ended" && " — share ended"}
+                </span>
+                <button onClick={() => shareSessionRef.current?.stopViewing()} aria-label="Close screen share view"><UiIcon name="close" /></button>
+              </div>
+              <video ref={shareVideoRef} className="chips-share-video" autoPlay playsInline />
+            </div>
+          )}
           <div
             className="ts-chat-messages"
             style={{
@@ -14849,7 +14997,7 @@ function AppInner() {
                     }`}
                   >
                     <span className="ts-chat-from">{entry.from}:</span>{" "}
-                    <span className="ts-chat-bubble">{renderBbcode(entry.message, { images: chatImages, stillImages: !treeOptions.animateImages })}</span>
+                    <span className="ts-chat-bubble">{renderChatMessage(entry.message)}</span>
                   </div>
                 ))
               : activeTab === "server"
@@ -14864,7 +15012,7 @@ function AppInner() {
                         className={`ts-chat-line${entry.from === ownClient?.name ? " ts-chat-line-self" : ""}`}
                       >
                         <span className="ts-chat-from">{entry.from}:</span>{" "}
-                        <span className="ts-chat-bubble">{renderBbcode(entry.message, { images: chatImages, stillImages: !treeOptions.animateImages })}</span>
+                        <span className="ts-chat-bubble">{renderChatMessage(entry.message)}</span>
                       </div>
                     )
                   )
@@ -14882,7 +15030,7 @@ function AppInner() {
                       <span className="ts-chat-from">
                         {entry.fromSelf ? t("chat.you") : pmThreads[activeTab].partnerName}:
                       </span>{" "}
-                      <span className="ts-chat-bubble">{renderBbcode(entry.message, { images: chatImages, stillImages: !treeOptions.animateImages })}</span>
+                      <span className="ts-chat-bubble">{renderChatMessage(entry.message)}</span>
                     </div>
                   ))}
             <div ref={chatEndRef} />
@@ -14943,6 +15091,14 @@ function AppInner() {
                   handleSendChat();
                 }
               }}
+              onPaste={(e) => {
+                const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
+                const file = item?.getAsFile();
+                if (file && mediaUploadEnabled()) {
+                  e.preventDefault();
+                  void handleChatImage(file);
+                }
+              }}
               disabled={!connected}
               placeholder={
                 !connected
@@ -14954,6 +15110,34 @@ function AppInner() {
                       : t("chat.messagePartner", { name: pmThreads[activeTab]?.partnerName ?? "" })
               }
             />
+            {mediaUploadEnabled() && (
+              <>
+                <button
+                  onClick={() => chatFileRef.current?.click()}
+                  disabled={!connected || chatUpload === "uploading"}
+                  aria-label="Send image"
+                  title="Send image"
+                >
+                  <UiIcon name="image" />
+                </button>
+                <input
+                  ref={chatFileRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void handleChatImage(f);
+                  }}
+                />
+              </>
+            )}
+            {chatUpload !== "idle" && (
+              <span className="chips-chat-upload-status" role="status">
+                {chatUpload === "uploading" ? "Uploading image…" : "Image upload failed"}
+              </span>
+            )}
             <button onClick={handleSendChat} disabled={!connected}>
               {t("chat.send")}
             </button>
@@ -14977,11 +15161,12 @@ function AppInner() {
         })}
       </div>
       <div className="chips-self-bar" data-lg>
+        {(() => { const plate = profileStyle.bannerId ? mediaUrl(profileStyle.bannerId) : (profileStyle.bannerImage ?? (ownClient ? clientAvatarUrl(ownClient, serverIconImages) : null)); return plate ? <span className="chips-nameplate" aria-hidden="true"><StillImg still={!treeOptions.animateImages} src={plate} alt="" loading="lazy" /></span> : null; })()}
         <span className="chips-self-avatar">{profileStyle.avatarImage ? <img src={profileStyle.avatarImage} alt="Your avatar"/> : ownClient ? <AvatarTile client={ownClient} images={serverIconImages} className="ts-client-avatar" isSelf/> : (nickname || "?").slice(0,1).toUpperCase()}</span>
         <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
         <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}</button>
         <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}><UiIcon name="headphones" /></button>
-        <button disabled aria-label="Screen share (coming later)" title="Screen share — coming later"><UiIcon name="screen" /></button>
+        <button onClick={toggleShare} disabled={!connected || !mediaUploadEnabled()} aria-label={sharePublish === "sharing" ? "Stop screen share" : "Share your screen"} aria-pressed={sharePublish === "sharing"} title={sharePublish === "sharing" ? "Stop screen share" : "Share your screen"} className={sharePublish === "sharing" ? "chips-share-active" : undefined}><UiIcon name="screen" /></button>
         <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings"><UiIcon name="settings" /></button>
       </div>
       <NewsTicker />

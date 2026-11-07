@@ -103,7 +103,8 @@ I'm usually in the AFK channel. [s:v1;fx=shimmer;c1=74e5ff;c2=a74cfd;ring=electr
 | `card` | two card colours | yes |
 | `st` | custom status line, percent-encoded UTF-8, max 80 characters | yes |
 | `xp` | XP number — **only if something supplies one**; Chips never invents XP from group names | yes, when present |
-| Avatar and banner **images** | local files | **no** |
+| `bi` | custom **banner image** id on the Chips media host (see Media, below) | yes, when present |
+| Avatar **image** | local file | **no** |
 
 What this means in practice:
 
@@ -111,10 +112,11 @@ What this means in practice:
   card colours, status line, and an XP value if one exists. Anyone running Chips reads the token
   from your description and renders your plate, ring and card with it — and so does *your own*
   client on every other machine.
-- **What does not sync:** uploaded avatar and banner images (they stay in this machine's local
+- **What does not sync:** the uploaded avatar image (it stays in this machine's local
   storage, because a description is a few hundred bytes and images are not); every other
   preference (audio devices, chat logging, theme, language, motion setting, …); and anything
-  server-side such as server groups, which come from the server itself.
+  server-side such as server groups, which come from the server itself. A custom **banner**
+  image does sync — see Media below.
 - **Nothing else in the description is touched.** Chips replaces the `[s:v1;…]` part in place and
   keeps your own text around it. If you had no token, it appends one.
 - **Plain-TeamSpeak clients see the token.** Native TS3 and other clients do not know this format,
@@ -130,6 +132,41 @@ What this means in practice:
 
 Style files: **Export/Import styles.json** in the same editor moves the local style (including
 images) as `{ "version": 1, "style": { … } }`.
+
+## Media — chat images, synced banners, nameplates
+
+Chips has a small media host (`https://chips.poyzo.ir`) for the things a
+TeamSpeak description cannot carry:
+
+- **Chat images.** With a media token set, the composer's image button (or
+  pasting an image) uploads the picture and sends its URL as the message.
+  Chips clients render a whole-message Chips image URL inline; plain
+  TeamSpeak clients just see the link. Foreign `[img]` hosts still obey the
+  generic "load remote chat images" setting — the Chips host is first-party
+  and always renders.
+- **Synced banner.** Picking a banner in the profile editor uploads it and
+  puts its id in the style token (`bi=…`), so every Chips client shows your
+  banner on your profile card. Without a custom banner, the card's backdrop
+  is your TeamSpeak avatar.
+- **Nameplates.** Channel-tree rows and the bottom self-bar show the same
+  banner (or the TS avatar) behind the name at low opacity under a dark
+  veil. Animated banners play unless avatar animation is off, which freezes
+  them on their first frame.
+
+- **Screen share.** The self-bar screen button shares your screen with
+  other Chips clients in your channel — WebRTC peer-to-peer, with a small
+  HTTPS relay on the media host only for connection setup (the picture
+  itself never passes through a server). Members who are sharing appear in
+  a strip above the chat with a Watch button. Connections recover from
+  network drops with bounded ICE-restart retries and a visible state;
+  there is no TURN relay, so a few strict NAT setups may not connect.
+
+**The token.** Uploads need the shared media token. It is injected at build
+time from the `CHIPS_UPLOAD_TOKEN` secret when present; anyone can instead
+paste their own under **Settings → Connection → Media token**, which wins
+over the build-time one. With no token, upload controls simply hide —
+viewing keeps working, because image ids are unguessable links. The token
+is never committed to this repository.
 
 ## Building from source
 
