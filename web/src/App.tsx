@@ -18,6 +18,19 @@ import "./styles/ide.css";
 // The default design. Last, so its :where() variables and .ts-design-glass
 // component rules sit on top of the stock sheet without !important.
 import "./styles/liquid-glass.css";
+// Step 3: the animation system (name styles, electric borders, avatar rings).
+// After the design sheets: it only ever adds light layers to existing elements.
+import "./styles/name-effects.css";
+import {
+  DEFAULT_NAME_STYLE_CONFIG,
+  SOLID_NAME_STYLE_CONFIG,
+  avatarRingAttributes,
+  loadNameStyleConfig,
+  loadReduceMotion,
+  namePlateAttributes,
+  saveReduceMotion,
+  type NameStyleConfig,
+} from "./nameEffects";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -913,6 +926,12 @@ const DisplayPrefsContext = createContext<{
   security: DEFAULT_SECURITY_SETTINGS,
   setSecurity: () => {},
 });
+/** Step 3 name style chosen for the local user (Step 4's panel writes it).
+ *  A context because the tree and the info panel both need it, deep in the
+ *  component tree. Reading it can never animate anything by itself: the
+ *  stylesheet only moves light, never letters (styles/name-effects.css). */
+const NameStyleContext = createContext<NameStyleConfig>(DEFAULT_NAME_STYLE_CONFIG);
+
 const DISCONNECT_MESSAGE_KEY = "webspeak3:disconnect-message";
 const COLLECTED_URLS_KEY = "webspeak3:collected-urls";
 
@@ -1707,16 +1726,15 @@ function ChannelTree({
             <ul className="ts-tree-list" role="group">
               {channelClients.map((c) => {
                 const clientSelected = selected?.type === "client" && selected.id === c.id;
+                // Voice activity, gated the same way the lamp and the row are.
+                // Drives the Talking-reactive name and the avatar ring, nothing else.
+                const clientSpeaking =
+                  talkers.has(c.id) && c.hasTalkPower && !c.inputMuted && c.inputHardwareEnabled;
                 return (
                 <li key={c.id} role="none">
                   <div
                     className={`ts-row ts-client-row${c.id === ownClientId ? " ts-self" : ""}${
-                      talkers.has(c.id) &&
-                      c.hasTalkPower &&
-                      !c.inputMuted &&
-                      c.inputHardwareEnabled
-                        ? " ts-talking"
-                        : ""
+                      clientSpeaking ? " ts-talking" : ""
                     }${clientSelected ? " ts-row-selected" : ""}`}
                     role="treeitem"
                     aria-level={level + 1}
@@ -1758,12 +1776,7 @@ function ChannelTree({
                       <span />
                     </span>
                     <TalkLamp
-                      talking={
-                        talkers.has(c.id) &&
-                        c.hasTalkPower &&
-                        !c.inputMuted &&
-                        c.inputHardwareEnabled
-                      }
+                      talking={clientSpeaking}
                       inputMuted={c.inputMuted}
                       inputHardwareEnabled={c.inputHardwareEnabled}
                       commander={c.isChannelCommander}
@@ -1778,7 +1791,13 @@ function ChannelTree({
                       isSelf={c.id === ownClientId}
                     />
                     {tree.flags && countryFlag(c.country) && <span title={c.country}>{countryFlag(c.country)}</span>}
-                    <span className="ts-tree-label">{c.name}</span>
+                    {/* The local user's own name carries the chosen Step 3 style;
+                        every other row keeps the plain flat label. */}
+                    {c.id === ownClientId ? (
+                      <NamePlate text={c.name} premium speaking={clientSpeaking} className="ts-tree-label" />
+                    ) : (
+                      <span className="ts-tree-label">{c.name}</span>
+                    )}
                     {tree.awayMessage && c.away && c.awayMessage && (
                       <span className="ts-client-away-message">({c.awayMessage})</span>
                     )}
@@ -1847,13 +1866,23 @@ function SpeakingNowBar({
           onDoubleClick={c.id === ownClientId ? undefined : () => onOpenPrivateChat(c.id, c.name)}
           onContextMenu={(e) => onContextMenu(e, c.id, c.name, c.id === ownClientId)}
         >
-          <AvatarTile client={c} images={images} className="ts-speaking-now-avatar" isSelf={c.id === ownClientId} />
+          <AvatarRing ring="speaking" speaking={talkers.has(c.id)}>
+            <AvatarTile client={c} images={images} className="ts-speaking-now-avatar" isSelf={c.id === ownClientId} />
+          </AvatarRing>
           {serverGroups === undefined ? (
-            <span className="ts-speaking-now-name">{c.name}</span>
+            c.id === ownClientId ? (
+              <NamePlate text={c.name} premium speaking={talkers.has(c.id)} className="ts-speaking-now-name" />
+            ) : (
+              <span className="ts-speaking-now-name">{c.name}</span>
+            )
           ) : (
             <div className="ts-speaking-now-body">
               <div className="ts-speaking-now-head">
-                <span className="ts-speaking-now-name">{c.name}</span>
+                {c.id === ownClientId ? (
+                  <NamePlate text={c.name} premium speaking={talkers.has(c.id)} className="ts-speaking-now-name" />
+                ) : (
+                  <span className="ts-speaking-now-name">{c.name}</span>
+                )}
                 {talkers.has(c.id) ? (
                   <span className="ts-speaking-now-bars" aria-hidden="true">
                     <i />
@@ -1907,6 +1936,8 @@ function InfoPanel({
   clients,
   serverGroups,
   images,
+  ownClientId,
+  talkers,
   onShowServerConnectionInfo,
   onEditServer,
 }: {
@@ -1923,13 +1954,17 @@ function InfoPanel({
   clients: ClientInfo[];
   serverGroups: GroupEntry[] | null;
   images: Record<string, string>;
+  /** Needed by the Step 3 name style + ring: only the local name is premium. */
+  ownClientId: number | null;
+  /** Voice activity, for the electric ring and the Talking-reactive name. */
+  talkers: Set<number>;
   onShowServerConnectionInfo: () => void;
   onEditServer: () => void;
 }) {
   const t = useT();
   if (!selected || selected.type === "server") {
     return (
-      <div className="ts-info-panel">
+      <div className="ts-info-panel chips-electric-border chips-electric-border--quiet" data-chips-anim="">
         <div className="ts-info-title">
           <ServerIcon />
           <span>{serverName || host}</span>
@@ -1975,19 +2010,43 @@ function InfoPanel({
           .map((gid) => serverGroups.find((g) => g.id === gid)?.name)
           .filter((n): n is string => !!n)
       : [];
+    const clientSpeaking =
+      talkers.has(client.id) && client.hasTalkPower && !client.inputMuted && client.inputHardwareEnabled;
+    const clientPhoto = clientAvatarUrl(client, images);
     return (
-      <div className="ts-info-panel">
+      // The featured card of the design gets the spark border (Step 3 effect 2);
+      // its avatar gets the same effect in small format while the client talks,
+      // and the slow gradient ring when they are quiet.
+      <div className="ts-info-panel chips-electric-border" data-chips-anim="">
         <div className="ts-info-title">
           <TalkLamp
-            talking={false}
+            talking={clientSpeaking}
             inputMuted={client.inputMuted}
             inputHardwareEnabled={client.inputHardwareEnabled}
           />
-          <span>{client.name}</span>
+          {client.id === ownClientId ? (
+            <NamePlate text={client.name} premium speaking={clientSpeaking} />
+          ) : (
+            <span>{client.name}</span>
+          )}
         </div>
-        {clientAvatarUrl(client, images) && (
-          <img className="ts-info-avatar" src={clientAvatarUrl(client, images)!} alt="" />
-        )}
+        {/* The ring needs a host even when the client never uploaded a photo,
+            so the glass design shows an initials tile in that case. Legacy
+            designs keep their photo-only panel (the tile is display: none
+            there) and therefore never see a ring. */}
+        <AvatarRing ring={clientSpeaking ? "electric" : "gradient"} speaking={clientSpeaking} square>
+          {clientPhoto ? (
+            <img className="ts-info-avatar" src={clientPhoto} alt="" />
+          ) : (
+            <span
+              className="ts-info-avatar-initials"
+              style={{ background: client.id === ownClientId ? "var(--accent)" : clientAvatarColor(client.name) }}
+              aria-hidden="true"
+            >
+              {client.name.trim().charAt(0).toUpperCase() || "?"}
+            </span>
+          )}
+        </AvatarRing>
         {client.country && (
           <div className="ts-info-row">
             <span>{t("info.country")}</span>{" "}
@@ -2025,7 +2084,7 @@ function InfoPanel({
   const isSpacer = parsed.alignment !== null;
 
   return (
-    <div className="ts-info-panel">
+    <div className="ts-info-panel chips-electric-border chips-electric-border--quiet" data-chips-anim="">
       <div className="ts-info-title">
         {!isSpacer && <ChannelIcon />}
         <span>{isSpacer ? parsed.name || channel.name : channel.name}</span>
@@ -4595,6 +4654,61 @@ function clientAvatarUrl(client: ClientInfo, images: Record<string, string>): st
   const path = client.avatarHash ? avatarPath(client.uid) : null;
   const base64 = path ? images[path] : undefined;
   return base64 ? iconDataUrl(base64) : null;
+}
+
+/** One name plate from the Step 3 animation system.
+ *
+ *  `premium` means "this is the local user's name", so it takes the style they
+ *  chose (Shimmer Gradient by default). Every other name stays Solid, which
+ *  renders nothing but the row's own colour — the tree is not a light show, and
+ *  the client has no way to know what style another user would have picked.
+ *
+ *  `speaking` is the existing voice-activity signal (the talkers set). Only the
+ *  Talking-reactive style reacts to it, and it only cross-fades a light layer:
+ *  the letters never move. See styles/name-effects.css for the motion law. */
+function NamePlate({
+  text,
+  premium = false,
+  speaking = false,
+  className,
+}: {
+  text: string;
+  premium?: boolean;
+  speaking?: boolean;
+  className?: string;
+}) {
+  const configured = useContext(NameStyleContext);
+  const { style, ...attrs } = namePlateAttributes(
+    premium ? configured : SOLID_NAME_STYLE_CONFIG,
+    text,
+    speaking
+  );
+  return (
+    <span className={`chips-name${className ? ` ${className}` : ""}`} {...attrs} style={style as React.CSSProperties}>
+      {text}
+    </span>
+  );
+}
+
+/** Host for an avatar ring. The ring is drawn by the stylesheet on this
+ *  wrapper's pseudo-elements, so an <img> avatar works exactly like the
+ *  initials tile. No orbiting dots: that decoration is banned in this design. */
+function AvatarRing({
+  ring,
+  speaking,
+  square = false,
+  children,
+}: {
+  ring: "gradient" | "speaking" | "electric";
+  speaking: boolean;
+  square?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <span className={`chips-avatar${square ? " chips-avatar-square" : ""}`} {...avatarRingAttributes(ring, speaking)}>
+      {children}
+    </span>
+  );
 }
 
 /** The initials tile, or the real avatar once it has been downloaded. */
@@ -7540,6 +7654,8 @@ function DesignPanel({
   onDeleteCustomTheme,
   idePixelFont,
   onIdePixelFontChange,
+  reduceMotion,
+  onReduceMotionChange,
 }: {
   designSelection: string;
   onSelectionChange: (next: string) => void;
@@ -7548,6 +7664,8 @@ function DesignPanel({
   onDeleteCustomTheme: (id: string) => void;
   idePixelFont: boolean;
   onIdePixelFontChange: (on: boolean) => void;
+  reduceMotion: boolean;
+  onReduceMotionChange: (on: boolean) => void;
 }) {
   const t = useT();
   const [editing, setEditing] = useState<CustomThemeDraft | null>(null);
@@ -7878,6 +7996,21 @@ function DesignPanel({
             <legend>{t("design.gif")}</legend>
             {treeCheckbox("animateAvatars", t("design.gif.avatars"))}
             {treeCheckbox("animateImages", t("design.gif.images"))}
+          </fieldset>
+          {/* Step 3: the in-app switch for the animation system. The OS
+              preference is honoured by the stylesheet either way, so leaving
+              this off never overrides a system "reduce motion". */}
+          <fieldset className="ts-options-fieldset">
+            <legend>{t("design.motion")}</legend>
+            <label className="ts-options-checkbox">
+              <input
+                type="checkbox"
+                checked={reduceMotion}
+                onChange={(e) => onReduceMotionChange(e.target.checked)}
+              />
+              {t("design.reduceMotion")}
+            </label>
+            <p className="ts-options-hint">{t("design.reduceMotion.hint")}</p>
           </fieldset>
         </div>
         <div className="ts-options-fields ts-design-col">
@@ -8481,6 +8614,8 @@ function OptionsDialog({
   onDeleteCustomTheme,
   idePixelFont,
   onIdePixelFontChange,
+  reduceMotion,
+  onReduceMotionChange,
   showServerBanner,
   onShowServerBannerChange,
   chatImages,
@@ -8502,6 +8637,8 @@ function OptionsDialog({
   onDeleteCustomTheme: (id: string) => void;
   idePixelFont: boolean;
   onIdePixelFontChange: (on: boolean) => void;
+  reduceMotion: boolean;
+  onReduceMotionChange: (on: boolean) => void;
   showServerBanner: boolean;
   onShowServerBannerChange: (on: boolean) => void;
   chatImages: boolean;
@@ -8562,6 +8699,8 @@ function OptionsDialog({
                 onDeleteCustomTheme={onDeleteCustomTheme}
                 idePixelFont={idePixelFont}
                 onIdePixelFontChange={onIdePixelFontChange}
+                reduceMotion={reduceMotion}
+                onReduceMotionChange={onReduceMotionChange}
               />
             ) : active.id === "nachrichten" ? (
               <NachrichtenPanel />
@@ -12654,6 +12793,17 @@ function AppInner() {
   // One object per accent change: React diffs the custom properties by value, so
   // this is a plain object rather than a per-render rebuild of the palette.
   const accentStyle = useMemo(() => accentVariables(accent) as React.CSSProperties, [accent]);
+  // Step 3. The name style is read from localStorage today (Shimmer Gradient by
+  // default); Step 4's customization panel will add the setter and the profile
+  // card, both of which only need this same NameStyleConfig.
+  const [nameStyle] = useState<NameStyleConfig>(loadNameStyleConfig);
+  // "Reduce animations": the in-app switch, on top of the OS preference that the
+  // stylesheet already honours. Freezes every Step 3 effect to a static gradient.
+  const [reduceMotion, setReduceMotion] = useState<boolean>(loadReduceMotion);
+  const handleReduceMotionChange = (on: boolean) => {
+    setReduceMotion(on);
+    saveReduceMotion(on);
+  };
   // Refraction needs the SVG filter definitions mounted once; the hook no-ops
   // where `backdrop-filter: url()` is unsupported.
   useEffect(() => installLiquidGlass(), []);
@@ -12663,15 +12813,17 @@ function AppInner() {
 
   return (
     <DisplayPrefsContext.Provider value={displayPrefs}>
+    <NameStyleContext.Provider value={nameStyle}>
     <div
       className={`ts-app ts-theme-${theme}${designThemeClassName(designTheme)}${
         activeCustomTheme ? " ts-design-custom" : ""
       }${demoForceMobile ? " ts-force-mobile" : ""}${novaSplash ? " ts-nova-splash" : ""}${
         designTheme === "ide" && !idePixelFont ? " ts-ide-plain-font" : ""
-      }`}
+      }${reduceMotion ? " chips-reduce-motion" : ""}`}
       data-custom-theme={activeCustomTheme?.id}
       data-design-theme={designTheme}
       data-accent={accent}
+      data-motion={reduceMotion ? "reduced" : "full"}
       style={accentStyle}
     >
       {DEMO_MODE && (
@@ -13857,6 +14009,8 @@ function AppInner() {
               /* private mode: setting just doesn't persist */
             }
           }}
+          reduceMotion={reduceMotion}
+          onReduceMotionChange={handleReduceMotionChange}
           showServerBanner={showServerBanner}
           onShowServerBannerChange={(on) => {
             setShowServerBanner(on);
@@ -14579,6 +14733,8 @@ function AppInner() {
                 clients={treeClients}
                 serverGroups={serverGroups}
                 images={serverIconImages}
+                ownClientId={ownClientId ?? ownClient?.id ?? null}
+                talkers={displayTalkers}
                 onShowServerConnectionInfo={handleShowServerConnectionInfo}
                 onEditServer={() => setServerEditOpen(true)}
               />
@@ -14759,6 +14915,7 @@ function AppInner() {
       <NewsTicker />
       {iconPackStyle && <style>{iconPackStyle}</style>}
     </div>
+    </NameStyleContext.Provider>
     </DisplayPrefsContext.Provider>
   );
 }

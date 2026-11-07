@@ -28,32 +28,47 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Chips motion + light policy (Step 2 baseline — no Step 3 animation system).
+   Chips motion + light policy (Step 3: the controlled animation exception).
 
-   In Step 1 this block was a blanket `animation: none; box-shadow: none;
-   filter: none` on every element, which would also kill the Liquid Glass
-   specular edges. It is now scoped to what the rules actually forbid:
+   Step 2 banned all keyframe animation app-wide. Step 3 introduces the house
+   animation system (styles/name-effects.css), so the ban becomes an allow-list
+   instead of a blanket:
 
-     - No letter motion, ever. There is no keyframe animation in the Chips
-       design; the only motion is the 140ms colour/opacity/1px-translate
-       transition on pointer states in styles/liquid-glass.css.
+     - No letter motion, ever. Letters and elements never move: no wave, no
+       bounce, no wiggle, no scale or translate jump. The ONLY elements allowed
+       to run a keyframe animation are the light layers the animation system
+       marks with [data-chips-anim], and those keyframes move only
+       `background-position`, the registered `--spark-pos` angle and the
+       opacity/brightness of a light layer (enforced by the keyframes in
+       name-effects.css). Everything else is still `animation: none`.
      - No glow. Blurred coloured halos, neon bloom and glowing shadows are
-       refused; the permitted light in this step is the crisp 1px specular
-       inset edge of the glass. Upstream's legacy designs (Standard/Nova/
-       Pulse/IDE) keep their flat Step 1 look and stay opt-in.
+       refused; the light in this design is crisp — the 1px specular inset edge
+       of the glass and the sharp gradient stops of the effect system.
+       `text-shadow` stays banned globally, including on the effects.
      - No element `filter:` on the legacy designs (as in Step 1). The glass
        design needs `backdrop-filter`, which is a separate property and is
        therefore untouched by the filter rule; no `filter:` is used on it
        either.
+     - The effect system is scoped to the glass design in CSS, so the legacy
+       designs (Standard/Nova/Pulse/IDE) keep their flat Step 1/2 look even
+       when their markup carries the effect attributes.
    ------------------------------------------------------------------------- */
 
 *,
 *::before,
 *::after {
-  /* Letter motion is banned outright, not just pending a later step. */
-  animation: none !important;
   /* No text glow, ever. */
   text-shadow: none !important;
+}
+
+/* Motion policy: everything animates nothing unless the animation system
+   opted it in. The exemption is a data attribute rather than a class so it can
+   never be inherited by in-between elements — only the marked layer itself and
+   its own pseudo-elements may run keyframes. */
+*:not([data-chips-anim]),
+*:not([data-chips-anim])::before,
+*:not([data-chips-anim])::after {
+  animation: none !important;
 }
 
 /* Legacy (non-glass) designs: the flat Step 1 baseline, unchanged. */

@@ -1,0 +1,604 @@
+/* ============================================================================
+   Chips — Step 3 animation system (house style)
+   ============================================================================
+
+   THE MOTION LAW (non-negotiable, from the project brief):
+
+     Motion in Chips is LIGHT moving across STATIC elements. Letters and
+     elements never move. No wave, no bounce, no wiggle, no scale jumps, ever.
+     Keyframe animation is allowed for exactly three things:
+
+       1. `background-position`      — a gradient travelling inside a fixed box
+       2. the registered `--spark-pos` angle — a light source going round a rim
+       3. `opacity` / brightness of a light layer — light fading, never moving
+
+     and for nothing else. `transform`, `translate`, `rotate`, `scale` and
+     `filter` are never keyframed here; `text-shadow` stays banned globally
+     (index.css). State changes (voice activity, hover) use CSS *transitions*
+     of colour/opacity, which are not keyframe motion.
+
+   NO GLOW: no drop-shadows, no blurred halos, no neon bloom. The websites
+   version of these effects is soft-lit; the app version is not. Every light
+   layer below is a crisp gradient — the "white-hot" core of the spark is a
+   solid colour stop, not a blur.
+
+   Scope: everything is scoped to the Liquid Glass design
+   (`.ts-app.ts-design-glass`). The legacy Standard/Nova/Pulse/IDE layouts keep
+   their flat Step 1/2 look and never animate — that is why the effect classes
+   are inert outside the glass design even though the markup carries them.
+
+   Mark-up contract (see src/nameEffects.ts, which builds these attributes):
+
+     .chips-name[data-name-style="solid|shimmer|crystal|prism|talking"]
+                [data-text="…"]          the shine sweep is painted from this
+                [data-speaking="1|0"]    the client's existing voice signal
+                [data-chips-anim]        opt-in flag for index.css's ban
+                style="--name-c1: #…; --name-c2: #…; …"
+
+     .chips-avatar[data-ring="gradient|speaking|electric"]
+                  [data-speaking="1|0"] [data-chips-anim]
+
+     .chips-electric-border / .chips-electric-border--quiet   (cards)
+   ========================================================================== */
+
+/* --- The one animated custom property ------------------------------------- */
+
+/* Registered so the browser can interpolate an angle. It is the only
+   non-background property this system animates: every rotating light (electric
+   border sparks, the electric avatar ring, the gradient avatar ring) reads this
+   same angle, which is why there is exactly one name for it. */
+@property --spark-pos {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* --- Keyframes: three families, all within the law ------------------------ */
+
+/* 1. background-position. The letters are static; the light band inside them
+      travels. 200% → -200% over a 200%-wide gradient = one full pass. */
+@keyframes chips-name-shimmer {
+  from {
+    background-position: 200% center;
+  }
+  to {
+    background-position: -200% center;
+  }
+}
+
+/* The shine sweep (shimmer, crystal). Same property, same direction. */
+@keyframes chips-name-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Crystal's "single crisp sweep": one pass, then a long calm hold. */
+@keyframes chips-name-sweep-once {
+  0%,
+  55% {
+    background-position: 260% 0;
+  }
+  90%,
+  100% {
+    background-position: -160% 0;
+  }
+}
+
+/* The quiet border sheen (14s). */
+@keyframes chips-quiet-sheen {
+  from {
+    background-position: 200% 50%;
+  }
+  to {
+    background-position: -200% 50%;
+  }
+}
+
+/* 2. --spark-pos: the light source travelling round a rim. Linear, constant
+      speed — a spark does not ease, and it never moves the element itself. */
+@keyframes chips-spark-turn {
+  from {
+    --spark-pos: 0deg;
+  }
+  to {
+    --spark-pos: 360deg;
+  }
+}
+
+/* 3. opacity of a light layer (voice activity). Never a size change. */
+@keyframes chips-light-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ===========================================================================
+   Name plates
+   =========================================================================== */
+
+.ts-app.ts-design-glass .chips-name {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  /* The plate clips at the end of its own box. `clip` rather than `ellipsis`
+     because the gradient fill is painted with a transparent text colour, which
+     would make the browser's ellipsis glyph invisible. */
+  overflow: hidden;
+  text-overflow: clip;
+  /* A flex item may shrink to its box; without this a long name would push the
+     row open instead of clipping. */
+  min-width: 0;
+
+  /* Colour slots. --name-c1 … --name-c5 come from the saved choice; without a
+     choice they fall back to the accent ramp. Step 2's accent switcher points
+     --primary and --accent at the same hex, so the second slot is a lit tint of
+     --accent (white-mixed) instead of a flat duplicate — otherwise the shimmer
+     would have nothing to travel through. */
+  --chips-name-c1: var(--name-c1, var(--primary));
+  --chips-name-c2: var(--name-c2, color-mix(in srgb, var(--accent) 55%, #ffffff));
+  --chips-name-c3: var(--name-c3, color-mix(in srgb, var(--primary) 50%, #ffffff));
+  --chips-name-c4: var(--name-c4, color-mix(in srgb, var(--accent) 70%, #0b0b12));
+  --chips-name-c5: var(--name-c5, var(--primary));
+
+  --chips-name-gradient: linear-gradient(
+    120deg,
+    var(--chips-name-c1) 0%,
+    var(--chips-name-c2) 25%,
+    var(--chips-name-c1) 50%,
+    var(--chips-name-c2) 75%,
+    var(--chips-name-c1) 100%
+  );
+  /* The talking-reactive second set. Warmer/lit, so "speaking" reads at a
+     glance without the name ever changing size or position. */
+  --chips-name-voice-gradient: linear-gradient(
+    120deg,
+    var(--name-v1, #ffffff) 0%,
+    var(--name-v2, color-mix(in srgb, var(--accent) 60%, #ffffff)) 50%,
+    var(--name-v1, #ffffff) 100%
+  );
+}
+
+/* --- Solid: flat colour, no light layer, nothing to animate --------------- */
+/* No `--name-c1` means "keep the row's own colour", which is what every name
+   that is not the local user's uses. */
+.ts-app.ts-design-glass .chips-name[data-name-style="solid"] {
+  color: var(--name-c1, currentColor);
+}
+
+/* --- Shimmer Gradient, Prism, Talking-reactive: the metal shimmer -------- */
+.ts-app.ts-design-glass .chips-name[data-name-style="shimmer"],
+.ts-app.ts-design-glass .chips-name[data-name-style="prism"],
+.ts-app.ts-design-glass .chips-name[data-name-style="talking"] {
+  background-image: var(--chips-name-gradient);
+  background-size: 200% auto;
+  background-repeat: repeat;
+  background-position: 200% center;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: chips-name-shimmer 3s linear infinite;
+}
+
+/* Prism: five colours through the same shimmer, slower and wider. */
+.ts-app.ts-design-glass .chips-name[data-name-style="prism"] {
+  background-image: linear-gradient(
+    120deg,
+    var(--chips-name-c1) 0%,
+    var(--chips-name-c2) 20%,
+    var(--chips-name-c3) 40%,
+    var(--chips-name-c4) 60%,
+    var(--chips-name-c5) 80%,
+    var(--chips-name-c1) 100%
+  );
+  background-size: 200% auto;
+  animation-duration: 6s;
+}
+
+/* The shine sweep laid over the shimmering glyphs: a narrow white band
+   travelling across the same text. `attr(data-text)` keeps the overlay the
+   exact same string, so it always sits on top of the letters. */
+.ts-app.ts-design-glass .chips-name[data-name-style="shimmer"]::after,
+.ts-app.ts-design-glass .chips-name[data-name-style="prism"]::after,
+.ts-app.ts-design-glass .chips-name[data-name-style="talking"]::after,
+.ts-app.ts-design-glass .chips-name[data-name-style="crystal"]::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  background-position: 200% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  pointer-events: none;
+  animation: chips-name-sweep 3s ease-in-out infinite;
+}
+
+/* --- Crystal: flat colour + one crisp sweep ------------------------------ */
+.ts-app.ts-design-glass .chips-name[data-name-style="crystal"] {
+  color: var(--name-c1, var(--primary));
+}
+
+/* "Single": one pass per 6s cycle, then a long calm hold. */
+.ts-app.ts-design-glass .chips-name[data-name-style="crystal"]::after {
+  animation-duration: 6s;
+  animation-timing-function: ease-in-out;
+  animation-name: chips-name-sweep-once;
+}
+
+/* --- Talking-reactive: the second gradient set cross-fades in ------------ */
+/* A light layer over the shimmering glyphs. Its opacity is what voice activity
+   changes; the letters still never move. 320ms out, 320ms back — "eases back
+   when they stop". */
+.ts-app.ts-design-glass .chips-name[data-name-style="talking"]::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  background-image: var(--chips-name-voice-gradient);
+  background-size: 200% auto;
+  background-position: 200% center;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 320ms ease-out;
+  animation: chips-name-shimmer 3s linear infinite;
+}
+
+.ts-app.ts-design-glass .chips-name[data-name-style="talking"][data-speaking="1"]::before {
+  opacity: 1;
+}
+
+/* ===========================================================================
+   Electric Border (cards / featured elements)
+   ===========================================================================
+   A spark travelling around a 2px masked ring. The mask trick keeps only the
+   padding band of the pseudo-element, so a conic gradient becomes a rim light.
+   Two identical rings, the second delayed by half a cycle, give the chase.
+   The card itself must be `position: relative; overflow: visible`. */
+
+.ts-app.ts-design-glass .chips-electric-border {
+  position: relative;
+  overflow: visible;
+  /* Border radius is inherited by the ring, so the ring matches the card. */
+  --chips-border-width: 2px;
+  --chips-border-radius: inherit;
+}
+
+.ts-app.ts-design-glass .chips-electric-border::before,
+.ts-app.ts-design-glass .chips-electric-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--chips-border-width, 2px);
+  background: conic-gradient(
+    from var(--spark-pos),
+    rgba(var(--primary-rgb), 0) 0deg,
+    rgba(var(--primary-rgb), 0) 292deg,
+    rgba(var(--primary-rgb), 0.7) 316deg,
+    rgba(180, 240, 255, 0.9) 334deg,
+    rgba(var(--primary-rgb), 0.7) 350deg,
+    rgba(var(--primary-rgb), 0) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: chips-spark-turn 2.5s linear infinite;
+}
+
+/* The second spark, exactly half a lap behind. */
+.ts-app.ts-design-glass .chips-electric-border::after {
+  animation-delay: -1.25s;
+}
+
+/* --- Quiet variant: a slow sheen band on a 1px rim ----------------------- */
+/* For calm surfaces — a card that is present but not shouting. */
+.ts-app.ts-design-glass .chips-electric-border--quiet {
+  --chips-border-width: 1px;
+}
+
+.ts-app.ts-design-glass .chips-electric-border--quiet::before {
+  background: linear-gradient(
+    115deg,
+    rgba(var(--primary-rgb), 0) 0%,
+    rgba(var(--primary-rgb), 0.12) 35%,
+    rgba(var(--primary-rgb), 0.5) 50%,
+    rgba(var(--primary-rgb), 0.12) 65%,
+    rgba(var(--primary-rgb), 0) 100%
+  );
+  background-size: 300% 300%;
+  background-position: 200% 50%;
+  animation: chips-quiet-sheen 14s linear infinite;
+}
+
+/* One rim only: the quiet variant does not chase. */
+.ts-app.ts-design-glass .chips-electric-border--quiet::after {
+  content: none;
+  animation: none;
+}
+
+/* ===========================================================================
+   Avatar rings
+   ===========================================================================
+   The ring lives on ::before / ::after of a host span, so the avatar itself
+   (an <img> or the initials tile) needs no change. Crisp 2px rim, no glow, no
+   orbiting dots or floating particles — those are banned in this design. */
+
+.ts-app.ts-design-glass .chips-avatar {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: var(--chips-avatar-radius, 50%);
+  --chips-ring-gap: 3px;
+  --chips-ring-width: 2px;
+}
+
+.ts-app.ts-design-glass .chips-avatar::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--chips-ring-gap, 3px));
+  border-radius: inherit;
+  padding: var(--chips-ring-width, 2px);
+  background: conic-gradient(
+    from var(--spark-pos),
+    rgba(var(--primary-rgb), 0.85) 0deg,
+    rgba(var(--primary-rgb), 0.1) 80deg,
+    color-mix(in srgb, var(--accent) 55%, #ffffff) 180deg,
+    rgba(var(--primary-rgb), 0.1) 280deg,
+    rgba(var(--primary-rgb), 0.85) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.55;
+  /* Smooth easing between voice states — no scaling, no jumping. */
+  transition: opacity 240ms ease-out;
+  animation: chips-spark-turn 8s linear infinite;
+}
+
+/* --- Speaking pulse ------------------------------------------------------
+   A still specular rim whose brightness follows voice activity. Idle it is a
+   quiet line; while the user speaks the bright edge comes up and breathes
+   gently (opacity only). */
+.ts-app.ts-design-glass .chips-avatar[data-ring="speaking"]::after {
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.95) 0deg,
+    rgba(var(--primary-rgb), 0.55) 30deg,
+    rgba(var(--primary-rgb), 0.1) 90deg,
+    rgba(255, 255, 255, 0.5) 180deg,
+    rgba(var(--primary-rgb), 0.1) 250deg,
+    rgba(255, 255, 255, 0.95) 360deg
+  );
+  opacity: 0.45;
+  animation: none;
+}
+
+.ts-app.ts-design-glass .chips-avatar[data-ring="speaking"][data-speaking="1"]::after {
+  opacity: 1;
+  animation: chips-light-pulse 1.8s ease-in-out infinite;
+}
+
+/* --- Electric ring: effect 2 in small format ----------------------------- */
+.ts-app.ts-design-glass .chips-avatar[data-ring="electric"]::before,
+.ts-app.ts-design-glass .chips-avatar[data-ring="electric"]::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--chips-ring-gap, 3px));
+  border-radius: inherit;
+  padding: var(--chips-ring-width, 2px);
+  background: conic-gradient(
+    from var(--spark-pos),
+    rgba(var(--primary-rgb), 0) 0deg,
+    rgba(var(--primary-rgb), 0) 276deg,
+    rgba(var(--primary-rgb), 0.7) 310deg,
+    rgba(180, 240, 255, 0.9) 330deg,
+    rgba(var(--primary-rgb), 0.7) 348deg,
+    rgba(var(--primary-rgb), 0) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.9;
+  transition: opacity 240ms ease-out;
+  animation: chips-spark-turn 2.5s linear infinite;
+}
+
+.ts-app.ts-design-glass .chips-avatar[data-ring="electric"]::before {
+  animation-delay: -1.25s;
+}
+
+.ts-app.ts-design-glass .chips-avatar[data-ring="electric"][data-speaking="1"]::after {
+  opacity: 1;
+}
+
+/* Every ring variant reads the same voice signal at its specular edge, so a
+   speaking user is legible even with a slow gradient ring. */
+.ts-app.ts-design-glass .chips-avatar[data-ring="gradient"][data-speaking="1"]::after {
+  opacity: 0.95;
+  animation-duration: 8s, 1.8s;
+  animation-name: chips-spark-turn, chips-light-pulse;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+}
+
+/* ===========================================================================
+   Reduced motion
+   ===========================================================================
+   Two triggers, identical result: the OS preference and the in-app
+   "Reduce animations" switch (a class App.tsx puts on the app root, persisted
+   in localStorage). Everything freezes into a still gradient — no shimmer
+   pass, no sweep, no spark.
+
+   `!important` here is deliberate and is the one place in this file that uses
+   it: the rules below have to win against every effect rule above regardless
+   of how many attribute selectors that rule carries, and this block is the
+   accessible baseline, not a theme. Keep the two blocks in sync. */
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-app.ts-design-glass .chips-name,
+  .ts-app.ts-design-glass .chips-name::before,
+  .ts-app.ts-design-glass .chips-name::after,
+  .ts-app.ts-design-glass .chips-electric-border::before,
+  .ts-app.ts-design-glass .chips-electric-border::after,
+  .ts-app.ts-design-glass .chips-avatar::before,
+  .ts-app.ts-design-glass .chips-avatar::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Freeze the gradient mid-plate: the letters keep their metal look, the
+     light just stops travelling. */
+  .ts-app.ts-design-glass .chips-name[data-name-style="shimmer"],
+  .ts-app.ts-design-glass .chips-name[data-name-style="prism"],
+  .ts-app.ts-design-glass .chips-name[data-name-style="talking"] {
+    background-position: 50% center !important;
+  }
+
+  /* A frozen white band across a name is a smudge, not light: the sweep layer
+     is removed entirely rather than parked. */
+  .ts-app.ts-design-glass .chips-name::after {
+    content: none !important;
+  }
+
+  /* Talking-reactive keeps its second gradient as a *state colour* (the name
+     still tells you that the user is speaking) but it switches instantly and
+     the overlay itself does not travel. */
+  .ts-app.ts-design-glass .chips-name[data-name-style="talking"]::before {
+    background-position: 50% center !important;
+  }
+
+  /* One still spark at the top of every rim. */
+  .ts-app.ts-design-glass .chips-electric-border::before,
+  .ts-app.ts-design-glass .chips-electric-border::after {
+    --spark-pos: 0deg !important;
+  }
+
+  .ts-app.ts-design-glass .chips-avatar::after {
+    --spark-pos: 0deg !important;
+    opacity: 0.8 !important;
+  }
+}
+
+/* The in-app switch: identical rules, selected by the class on the app root. */
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name::before,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name::after,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-electric-border::before,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-electric-border::after,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-avatar::before,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-avatar::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name[data-name-style="shimmer"],
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name[data-name-style="prism"],
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name[data-name-style="talking"] {
+  background-position: 50% center !important;
+}
+
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name::after {
+  content: none !important;
+}
+
+.ts-app.ts-design-glass.chips-reduce-motion .chips-name[data-name-style="talking"]::before {
+  background-position: 50% center !important;
+}
+
+.ts-app.ts-design-glass.chips-reduce-motion .chips-electric-border::before,
+.ts-app.ts-design-glass.chips-reduce-motion .chips-electric-border::after {
+  --spark-pos: 0deg !important;
+}
+
+.ts-app.ts-design-glass.chips-reduce-motion .chips-avatar::after {
+  --spark-pos: 0deg !important;
+  opacity: 0.8 !important;
+}
+
+/* ===========================================================================
+   Wire-up details for the existing UI
+   =========================================================================== */
+
+/* The info panel is the featured card: 14px radius in the glass sheet, and the
+   ring has to follow it. It also keeps its own scrolling — the ring is drawn
+   inside the panel's box (inset: 0), so the utility's `overflow: visible` is
+   not needed here and would have made a long panel spill instead of scroll. */
+.ts-app.ts-design-glass .ts-info-panel.chips-electric-border {
+  border-radius: 14px;
+  overflow-y: auto;
+}
+
+/* Stand-in for a client who never uploaded a photo: the ring needs a host.
+   Only the glass design draws it — the other layouts keep their photo-only
+   panel, which is also why the ring never appears there. */
+.ts-info-avatar-initials {
+  display: none;
+}
+
+.ts-app.ts-design-glass .ts-info-avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: oklch(0.18 0.02 258);
+  margin: 0.2rem 0 0.4rem;
+  user-select: none;
+}
+
+/* Its avatar is a 16px-radius square, not a circle, and it is a block in the
+   panel's flow (the plain <img> was `display: block` before the ring existed). */
+.ts-app.ts-design-glass .chips-avatar.chips-avatar-square {
+  --chips-avatar-radius: 16px;
+  --chips-ring-gap: 4px;
+  display: flex;
+  width: max-content;
+}
+
+/* The speaking strip (Pulse/IDE) uses small 36px round avatars. */
+.ts-app.ts-design-glass .ts-speaking-now-tile .chips-avatar {
+  --chips-ring-gap: 2px;
+}
