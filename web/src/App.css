@@ -5033,6 +5033,14 @@ input.ts-identities-uid {
 .chips-chat-image { display:block; max-width:min(420px, 100%); max-height:300px; border-radius:12px; object-fit:contain; }
 .chips-chat-upload-status { align-self:center; font-size:.85em; color:var(--text-muted); white-space:nowrap; }
 
+/* Step B: screen share — strip, viewer panel, active self-bar button. */
+.chips-share-strip { display:flex; flex-wrap:wrap; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); background:var(--surface-strong); }
+.chips-share-strip-item { display:inline-flex; align-items:center; gap:8px; font-size:.9em; }
+.chips-share-view { border-bottom:1px solid var(--border); background:#000; }
+.chips-share-view-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 12px; color:var(--text-muted); font-size:.9em; background:var(--surface-strong); }
+.chips-share-video { display:block; width:100%; max-height:46vh; background:#000; }
+.chips-share-active { color:var(--accent) !important; }
+
 .chips-ui-icon { display:inline-block; width:1.1em; height:1.1em; flex-shrink:0; vertical-align:-0.15em; pointer-events:none; }
 
 /* Step 7: .chipstheme list in Settings -> Appearance. Plain rows, no new

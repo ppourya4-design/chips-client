@@ -95,16 +95,22 @@ export class SigChannel {
   private running = false;
   private abort: AbortController | null = null;
   private failures = 0;
+  private onMessage: (msg: SigMessage) => void;
+  private onPeers: (peers: SigPeer[]) => void;
+  private fetchFn: FetchFn;
 
   constructor(
     room: string,
     me: string,
-    private onMessage: (msg: SigMessage) => void,
-    private onPeers: (peers: SigPeer[]) => void,
-    private fetchFn: FetchFn = fetch,
+    onMessage: (msg: SigMessage) => void,
+    onPeers: (peers: SigPeer[]) => void,
+    fetchFn: FetchFn = fetch,
   ) {
     this.room = room;
     this.me = me;
+    this.onMessage = onMessage;
+    this.onPeers = onPeers;
+    this.fetchFn = fetchFn;
   }
 
   start(): void {

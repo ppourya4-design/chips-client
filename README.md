@@ -153,6 +153,14 @@ TeamSpeak description cannot carry:
   veil. Animated banners play unless avatar animation is off, which freezes
   them on their first frame.
 
+- **Screen share.** The self-bar screen button shares your screen with
+  other Chips clients in your channel — WebRTC peer-to-peer, with a small
+  HTTPS relay on the media host only for connection setup (the picture
+  itself never passes through a server). Members who are sharing appear in
+  a strip above the chat with a Watch button. Connections recover from
+  network drops with bounded ICE-restart retries and a visible state;
+  there is no TURN relay, so a few strict NAT setups may not connect.
+
 **The token.** Uploads need the shared media token. It is injected at build
 time from the `CHIPS_UPLOAD_TOKEN` secret when present; anyone can instead
 paste their own under **Settings → Connection → Media token**, which wins

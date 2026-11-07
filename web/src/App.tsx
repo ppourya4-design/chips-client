@@ -42,6 +42,7 @@ import {
 } from "./nameEffects";
 import { loadProfileStyle, saveProfileStyle, exportStylesJson, importStylesJson, parseStyleToken, encodeStyleToken, replaceStyleToken, type ProfileStyle } from "./profileStyle";
 import { chipsImageIdFromMessage, loadMediaTokenOverride, mediaUploadEnabled, mediaUrl, saveMediaTokenOverride, uploadMedia } from "./media";
+import { ShareSession, loadPeerId, type PublishState as SharePublishState, type SharerInfo, type ViewState as ShareViewState } from "./screenShare";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -8997,6 +8998,13 @@ function AppInner() {
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const [chatUpload, setChatUpload] = useState<"idle" | "uploading" | "error">("idle");
   const chatFileRef = useRef<HTMLInputElement>(null);
+  const shareSessionRef = useRef<ShareSession | null>(null);
+  const [sharePublish, setSharePublish] = useState<SharePublishState>("idle");
+  const [sharers, setSharers] = useState<SharerInfo[]>([]);
+  const [viewPeer, setViewPeer] = useState<string | null>(null);
+  const [viewState, setViewState] = useState<ShareViewState>("idle");
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const shareVideoRef = useRef<HTMLVideoElement>(null);
   const [pmThreads, setPmThreads] = useState<Record<number, PmThread>>({});
   const [pokes, setPokes] = useState<PokeNotice[]>([]);
   const [pokeTarget, setPokeTarget] = useState<{ id: number; name: string } | null>(null);
@@ -12821,6 +12829,52 @@ function AppInner() {
     () => localStorage.getItem("chips:auto-connect") === "on",
   );
   const [mediaTokenOverride, setMediaTokenOverride] = useState(loadMediaTokenOverride);
+  // Screen share (Step B): one signaling session per joined channel. The
+  // session lives entirely on the media host's relay + P2P WebRTC; it is
+  // recreated when the channel changes and torn down on disconnect.
+  const shareChannel = ownClient?.channel;
+  useEffect(() => {
+    if (!connected || shareChannel == null || !mediaUploadEnabled()) return;
+    const session = new ShareSession({
+      channelId: shareChannel,
+      peerId: loadPeerId(),
+      name: ownClient?.name ?? nickname,
+      uid: ownClient?.uid ?? "",
+      events: {
+        onPublishState: setSharePublish,
+        onSharers: setSharers,
+        onViewState: (peerId, state) => {
+          setViewState(state);
+          if (state === "idle") setViewPeer((cur) => (cur === peerId ? null : cur));
+        },
+        onRemoteStream: (peerId, stream) => {
+          setRemoteStream(stream);
+          if (stream) setViewPeer(peerId);
+        },
+      },
+    });
+    shareSessionRef.current = session;
+    session.start();
+    return () => {
+      session.dispose();
+      shareSessionRef.current = null;
+      setSharers([]);
+      setRemoteStream(null);
+      setViewPeer(null);
+      setViewState("idle");
+      setSharePublish("idle");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, shareChannel]);
+  useEffect(() => {
+    if (shareVideoRef.current) shareVideoRef.current.srcObject = remoteStream;
+  }, [remoteStream, viewPeer, viewState]);
+  const toggleShare = () => {
+    const session = shareSessionRef.current;
+    if (!session) return;
+    if (sharePublish === "sharing") session.stopPublishing();
+    else void session.startPublishing().catch(() => { /* picker cancelled */ });
+  };
   const [glassIntensity, setGlassIntensity] =
     useState<string>(loadGlassIntensity);
   const [muteBinding, setMuteBinding] = useState<PttBinding | null>(() =>
@@ -14894,6 +14948,35 @@ function AppInner() {
               onContextMenu={handleClientContextMenu}
             />
           )}
+          {sharers.some((s) => s.sharing) && (
+            <div className="chips-share-strip">
+              {sharers.filter((s) => s.sharing).map((s) => (
+                <span key={s.peerId} className="chips-share-strip-item">
+                  <UiIcon name="screen" /> {s.name} is sharing their screen
+                  {viewPeer === s.peerId ? (
+                    <button onClick={() => shareSessionRef.current?.stopViewing()}>Stop watching</button>
+                  ) : (
+                    <button onClick={() => shareSessionRef.current?.watch(s.peerId)}>Watch</button>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+          {viewPeer && viewState !== "idle" && (
+            <div className="chips-share-view">
+              <div className="chips-share-view-head">
+                <span>
+                  {sharers.find((s) => s.peerId === viewPeer)?.name ?? "Screen share"}
+                  {viewState === "connecting" && " — connecting…"}
+                  {viewState === "reconnecting" && " — reconnecting…"}
+                  {viewState === "failed" && " — connection failed"}
+                  {viewState === "ended" && " — share ended"}
+                </span>
+                <button onClick={() => shareSessionRef.current?.stopViewing()} aria-label="Close screen share view"><UiIcon name="close" /></button>
+              </div>
+              <video ref={shareVideoRef} className="chips-share-video" autoPlay playsInline />
+            </div>
+          )}
           <div
             className="ts-chat-messages"
             style={{
@@ -15083,7 +15166,7 @@ function AppInner() {
         <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
         <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}</button>
         <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}><UiIcon name="headphones" /></button>
-        <button disabled aria-label="Screen share (coming later)" title="Screen share — coming later"><UiIcon name="screen" /></button>
+        <button onClick={toggleShare} disabled={!connected || !mediaUploadEnabled()} aria-label={sharePublish === "sharing" ? "Stop screen share" : "Share your screen"} aria-pressed={sharePublish === "sharing"} title={sharePublish === "sharing" ? "Stop screen share" : "Share your screen"} className={sharePublish === "sharing" ? "chips-share-active" : undefined}><UiIcon name="screen" /></button>
         <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings"><UiIcon name="settings" /></button>
       </div>
       <NewsTicker />

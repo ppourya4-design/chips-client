@@ -988,3 +988,70 @@ Implemented directly by the operator (not Arena) on branch `claude/step-a-media`
   adds it, release builds ship without a build-time token and uploads work
   via the Settings token.
 - Screen share (Step B) is not in this step.
+
+## Step B — screen share between Chips clients (WebRTC + relay signaling)
+
+Implemented directly by the operator on branch `claude/step-a-media`
+(commits after Step A). Design as locked with the owner on 2026-11-07.
+
+### Why not the TeamSpeak protocol — and not upstream's streamer
+
+TeaSpeak speaks TS3; TS6-style streaming does not exist there. The fork's
+upstream TS6 `StreamViewer`/`StreamPublisher` (`stream.ts`/`publish.ts`)
+are untouched and remain non-functional against this server. Chips screen
+share is a separate, Chips-clients-only channel:
+
+- **Signaling:** the media host's HTTPS long-poll relay (`/sig/send`,
+  `/sig/poll` on chips.poyzo.ir), rooms named `chan-<TS channel id>`.
+  Relay kinds are limited to offer/answer/ice/presence/bye, so the
+  protocol is a **viewer-offer mesh**: presence `{sharing}` marks a
+  publisher; an `offer`-kind broadcast `{announce:true, name, uid}` carries
+  the sharer's name (presence has none); a viewer creates the peer
+  connection with recvonly transceivers and sends the offer; the publisher
+  adds the captured tracks and answers. ICE trickles both ways; `bye`
+  tears a pair down. Presence + announce repeat every 25 s.
+- **Media:** pure WebRTC P2P (`getDisplayMedia` in WebView2). Nothing
+  routes through the hosting or any server. STUN: Google + Cloudflare
+  public servers (a deliberate, user-initiated exception to the
+  no-calls-home posture — without STUN most home NATs cannot connect).
+  **No TURN** (free-only constraint): symmetric-NAT pairs may fail to
+  connect; the view reports `failed` after bounded ICE-restart retries
+  instead of hanging.
+- **Stability rules (owner's bar):** poll loop dedupes the relay's
+  at-least-once delivery by message id and backs off on errors; an
+  anti-spin pause keeps a fast-answering relay from hot-looping the CPU
+  (found by a hanging test, fixed in the module); viewer ICE
+  `disconnected`/`failed` → ICE-restart re-offer after 3 s, max 5, with a
+  visible `reconnecting` state; publisher stops cleanly when the captured
+  track ends (browser's own stop button) and broadcasts `bye`; a watcher
+  whose publisher leaves the room or stops sharing is ended by the
+  presence watcher.
+
+### UI
+
+- The self-bar screen button (a disabled placeholder since Step 6.5) now
+  toggles sharing; it needs a media token (same gate as uploads) and is
+  accent-lit while live. Screen share captures video (+ audio when the
+  browser offers it).
+- A strip above the chat lists channel members currently sharing, with
+  Watch / Stop watching. The viewer panel renders the stream with a state
+  line (connecting / reconnecting / failed / ended) and a close button.
+- One watched publisher at a time in v1; a publisher serves every watcher
+  (one peer connection each).
+
+### Tests
+
+- **88/88 pass** — 4 new in `web/tests/screen-share.test.ts` (room naming,
+  cursor dedupe/replay, poll behaviour against a fake relay, stop safety);
+  registered in the Windows workflow. Production build passes; oxlint
+  0 errors / 9 warnings.
+
+### Honest limits
+
+- **Nothing ran on Windows/WebView2 or between two real PCs.** NAT
+  traversal success with the circle's actual routers, WebView2's
+  `getDisplayMedia` picker behaviour, and end-to-end latency are all
+  unverified until the owner's two-PC test. The signaling relay was
+  verified live at the HTTP level when the endpoint was deployed.
+- Screen share requires the media token (the relay is token-gated), so it
+  ships dark until the token is configured (Settings or the build secret).
