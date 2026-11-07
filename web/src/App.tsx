@@ -1,3 +1,4 @@
+import { loadActionBinding, loadGlassIntensity } from "./settings";
 import {
   createContext,
   useCallback,
@@ -140,10 +141,8 @@ import {
   MicCapture,
   SAMPLE_RATE,
   encodeWavStereo,
-  hasNativeOutputPicker,
   listAudioInputDevices,
   listAudioOutputDevices,
-  pickAudioOutputDevice,
 } from "./voice";
 import { createAec3, type Aec3Instance } from "./aec3";
 import { isTauri } from "@tauri-apps/api/core";
@@ -2197,7 +2196,6 @@ function ConnectDialog({
   onConnectNewTab,
   onCancel,
   nova,
-  onOpenOptions,
   canOpenNewTab,
 }: {
   host: string;
@@ -2228,7 +2226,6 @@ function ConnectDialog({
    *  subtitle, settings shortcut) around the same form instead of the
    *  Standard theme's plain titled dialog box. */
   nova: boolean;
-  onOpenOptions: () => void;
   canOpenNewTab: boolean;
 }) {
   const t = useT();
@@ -2260,18 +2257,7 @@ function ConnectDialog({
 
   const dialogBody = (
     <div className="ts-dialog ts-connect-dialog" onClick={(e) => e.stopPropagation()}>
-      {nova ? (
-        <button className="ts-connect-nova-settings" onClick={onOpenOptions} title={t("menu.extras.options")}>
-          ⚙️
-        </button>
-      ) : (
-        <div className="ts-dialog-titlebar">
-          <span>{t("connect.title")}</span>
-          <button onClick={onCancel} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
-          </button>
-        </div>
-      )}
+      {!nova && <div className="ts-dialog-titlebar"><span>{t("connect.title")}</span><button onClick={onCancel} aria-label="Close Connect">✕</button></div>}
       <div className="ts-dialog-body">
         <div className="ts-dialog-row">
           <label className="ts-dialog-field ts-dialog-field-grow">
@@ -4667,9 +4653,10 @@ function clientAvatarUrl(client: ClientInfo, images: Record<string, string>): st
  *  Talking-reactive style reacts to it, and it only cross-fades a light layer:
  *  the letters never move. See styles/name-effects.css for the motion law. */
 function ProfileStyleEditor({ value, onChange, onClose }: { value: ProfileStyle; onChange: (v: ProfileStyle) => void; onClose: () => void }) {
+  const backdrop = useBackdropDismiss(onClose);
   const setName = (patch: Partial<NameStyleConfig>) => onChange({...value,name:{...value.name,...patch}});
   const file = (text: string) => { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download="styles.json"; a.click(); URL.revokeObjectURL(a.href); };
-  return <div className="ts-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section role="dialog" aria-modal="true" aria-label="Profile style" className="ts-modal" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,bannerImage:String(r.result)});r.readAsDataURL(f);}}}/> <button onClick={()=>onChange({...value,bannerImage:undefined})}>Clear</button></p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
+  return <div className="ts-dialog-backdrop" {...backdrop}><section aria-label="Profile style" className="ts-dialog chips-profile-editor" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,bannerImage:String(r.result)});r.readAsDataURL(f);}}}/> <button onClick={()=>onChange({...value,bannerImage:undefined})}>Clear</button></p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
 }
 
 function NamePlate({
@@ -6160,20 +6147,12 @@ function AwayDialog({
 }
 
 const OPTIONS_SECTIONS = [
-  { id: "anwendung", icon: "🎧" },
-  { id: "konto", icon: "👤" },
-  { id: "wiedergabe", icon: "🔊" },
-  { id: "aufnahme", icon: "🎙️" },
-  { id: "sounds", icon: "🔔" },
-  { id: "design", icon: "🖌️" },
-  { id: "erweiterungen", icon: "🧩" },
-  { id: "hotkeys", icon: "⌨️" },
-  { id: "whispern", icon: "🤫" },
-  { id: "downloads", icon: "⬇️" },
-  { id: "chat", icon: "💬" },
-  { id: "sicherheit", icon: "🛡️" },
-  { id: "nachrichten", icon: "🔤" },
-  { id: "meldungen", icon: "ℹ️" },
+  { id: "connection", icon: "🌐", label: "Connection" },
+  { id: "audio", icon: "🎧", label: "Audio" },
+  { id: "hotkeys", icon: "⌨", label: "Hotkeys" },
+  { id: "sounds", icon: "🔔", label: "Notifications & sounds" },
+  { id: "design", icon: "◐", label: "Appearance" },
+  { id: "profile", icon: "👤", label: "Profile" },
 ] as const;
 
 interface AudioSettings {
@@ -6221,7 +6200,7 @@ interface AudioSettings {
   onToggleAec3: () => void;
 }
 
-function PttKeyButton({ binding, onChange }: { binding: PttBinding | null; onChange: (b: PttBinding) => void }) {
+function PttKeyButton({ binding, onChange, keyboardOnly = false }: { binding: PttBinding | null; onChange: (b: PttBinding) => void; keyboardOnly?: boolean }) {
   const t = useT();
   const [listening, setListening] = useState(false);
   useEffect(() => {
@@ -6241,6 +6220,7 @@ function PttKeyButton({ binding, onChange }: { binding: PttBinding | null; onCha
     const onMouse = (e: MouseEvent) => {
       // Left click is how you started (and how you click away), so it can't be PTT.
       if (e.button === 0) return setListening(false);
+      if (keyboardOnly) return;
       take(e, { code: `Mouse${e.button}`, label: `Mouse ${e.button + 1}` });
       // The back/forward side buttons navigate on release; keep the page.
       window.addEventListener("mouseup", (up) => up.preventDefault(), { capture: true, once: true });
@@ -6251,7 +6231,7 @@ function PttKeyButton({ binding, onChange }: { binding: PttBinding | null; onCha
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("mousedown", onMouse, true);
     };
-  }, [listening, onChange]);
+  }, [listening, onChange, keyboardOnly]);
   return (
     <button className={listening ? "ts-ptt-key-listening" : undefined} onClick={() => setListening(true)}>
       {listening ? t("recording.pttKeyPress") : (binding?.label ?? t("recording.pttKeyNone"))}
@@ -6603,11 +6583,6 @@ function AnwendungPanel({
             <label className="ts-options-radio">
               <input type="radio" name="ts-app-subscribe" checked readOnly />
               {t("app.subscribe.all")}
-            </label>
-            {/* The connector always subscribes everything; "current only" needs connector work. */}
-            <label className="ts-options-radio ts-options-disabled" title={t("design.notAvailable")}>
-              <input type="radio" name="ts-app-subscribe" disabled />
-              {t("app.subscribe.current")}
             </label>
           </fieldset>
         </div>
@@ -7093,12 +7068,7 @@ function DownloadsPanel() {
           <legend>{t("downloadSettings.directory")}</legend>
           <div className="ts-download-dir">
             {t("downloadSettings.directoryLabel")} <strong>{downloadDir?.name ?? t("downloadSettings.browserDefault")}</strong>
-            <button
-              disabled={!canPickFolder}
-              onClick={() => void pickDownloadDir().then((dir) => dir && setDownloadDir(dir))}
-            >
-              {t("downloadSettings.change")}
-            </button>
+            {canPickFolder && <button onClick={() => void pickDownloadDir().then((dir) => dir && setDownloadDir(dir))}>{t("downloadSettings.change")}</button>}
             {downloadDir && (
               <button onClick={() => void clearDownloadDir().then(() => setDownloadDir(null))}>
                 {t("downloadSettings.reset")}
@@ -7109,15 +7079,14 @@ function DownloadsPanel() {
             <input type="radio" checked={downloads.saveMode === "dir"} onChange={() => set({ saveMode: "dir" })} />
             {t("downloadSettings.alwaysDir")}
           </label>
-          <label className="ts-options-radio">
+          {canPickFolder && <label className="ts-options-radio">
             <input
               type="radio"
-              disabled={!canPickFolder}
               checked={downloads.saveMode === "ask"}
               onChange={() => set({ saveMode: "ask" })}
             />
             {t("downloadSettings.askEachTime")}
-          </label>
+          </label>}
           {!canPickFolder && <p className="ts-options-hint">{t("downloadSettings.unsupported")}</p>}
         </fieldset>
         <fieldset className="ts-options-fieldset">
@@ -7946,12 +7915,7 @@ function DesignPanel({
     </label>
   );
   // ponytail: these need data the connector doesn't forward yet (client_badges, group types).
-  const unavailableCheckbox = (label: string) => (
-    <label className="ts-options-checkbox ts-options-disabled" title={t("design.notAvailable")}>
-      <input type="checkbox" disabled />
-      {label}
-    </label>
-  );
+
 
   return (
     <>
@@ -7997,8 +7961,8 @@ function DesignPanel({
               </select>
             </label>
             <div className="ts-design-custom-actions">
-              <button onClick={() => setManageOpen(true)}>{t("design.manage")}</button>
-              {!isTauri() && <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>}
+              {/* Legacy theme tooling is not exposed; Step 7 owns theme files. */}
+
             </div>
           </fieldset>
           <fieldset className="ts-options-fieldset">
@@ -8056,10 +8020,7 @@ function DesignPanel({
             </label>
             {treeCheckbox("clientsBelow", t("design.tree.clientsBelow"))}
             {treeCheckbox("flags", t("design.tree.flags"))}
-            {unavailableCheckbox(t("design.tree.overwolf"))}
-            {unavailableCheckbox(t("design.tree.badges"))}
             {treeCheckbox("groupIconsInMenus", t("design.tree.groupIconsInMenus"))}
-            {unavailableCheckbox(t("design.tree.hideInaccessibleGroups"))}
             {treeCheckbox("commanderLamp", t("design.tree.commanderLamp"))}
             {treeCheckbox("awayMessage", t("design.tree.awayMessage"))}
             {treeCheckbox("tooltips", t("design.tree.tooltips"))}
@@ -8612,61 +8573,44 @@ function NachrichtenPanel() {
 }
 
 function OptionsDialog({
+  hubPanels,
   section,
   onSectionChange,
   onClose,
   audio,
-  designSelection,
-  onDesignSelectionChange,
-  customThemes,
-  onSaveCustomTheme,
-  onDeleteCustomTheme,
-  idePixelFont,
-  onIdePixelFontChange,
-  reduceMotion,
-  onReduceMotionChange,
-  showServerBanner,
-  onShowServerBannerChange,
-  chatImages,
-  onChatImagesChange,
   onOpenWhisperLists,
-  onOpenIdentities,
-  onClearCache,
   onOpenFavorites,
   onApplyPackToFavorites,
 }: {
+  hubPanels: Record<string, React.ReactNode>;
   section: string;
   onSectionChange: (id: string) => void;
   onClose: () => void;
   audio: AudioSettings;
-  designSelection: string;
-  onDesignSelectionChange: (next: string) => void;
-  customThemes: CustomTheme[];
-  onSaveCustomTheme: (theme: CustomTheme) => void;
-  onDeleteCustomTheme: (id: string) => void;
-  idePixelFont: boolean;
-  onIdePixelFontChange: (on: boolean) => void;
-  reduceMotion: boolean;
-  onReduceMotionChange: (on: boolean) => void;
-  showServerBanner: boolean;
-  onShowServerBannerChange: (on: boolean) => void;
-  chatImages: boolean;
-  onChatImagesChange: (on: boolean) => void;
   onOpenWhisperLists: () => void;
-  onOpenIdentities: () => void;
-  onClearCache: () => void;
   onOpenFavorites: () => void;
   onApplyPackToFavorites: () => void;
 }) {
   const t = useT();
-  const active = OPTIONS_SECTIONS.find((s) => s.id === section) ?? OPTIONS_SECTIONS[0];
+  const active =
+    OPTIONS_SECTIONS.find((s) => s.id === section) ?? OPTIONS_SECTIONS[0];
   const backdrop = useBackdropDismiss(onClose);
   return (
     <div className="ts-dialog-backdrop" {...backdrop}>
-      <div className="ts-dialog ts-options-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Chips settings"
+        className="ts-dialog ts-options-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="ts-dialog-titlebar">
-          <span>{t("options.title")}</span>
-          <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
+          <span>Chips settings</span>
+          <button
+            onClick={onClose}
+            title={t("dialog.close")}
+            aria-label={t("dialog.close")}
+          >
             ✕
           </button>
         </div>
@@ -8679,64 +8623,41 @@ function OptionsDialog({
                 onClick={() => onSectionChange(s.id)}
               >
                 <span className="ts-options-sidebar-icon">{s.icon}</span>
-                <span>{t(`options.section.${s.id}`)}</span>
+                <span>{s.label}</span>
               </button>
             ))}
           </div>
           <div className="ts-options-content">
-            {active.id === "anwendung" ? (
-              <AnwendungPanel
-                showServerBanner={showServerBanner}
-                onShowServerBannerChange={onShowServerBannerChange}
-                chatImages={chatImages}
-                onChatImagesChange={onChatImagesChange}
-              />
-            ) : active.id === "wiedergabe" ? (
-              <WiedergabePanel audio={audio} />
-            ) : active.id === "aufnahme" ? (
-              <AufnahmePanel audio={audio} />
-            ) : active.id === "hotkeys" ? (
-              <HotkeysPanel audio={audio} />
-            ) : active.id === "sounds" ? (
-              <SoundsPanel />
-            ) : active.id === "design" ? (
-              <DesignPanel
-                designSelection={designSelection}
-                onSelectionChange={onDesignSelectionChange}
-                customThemes={customThemes}
-                onSaveCustomTheme={onSaveCustomTheme}
-                onDeleteCustomTheme={onDeleteCustomTheme}
-                idePixelFont={idePixelFont}
-                onIdePixelFontChange={onIdePixelFontChange}
-                reduceMotion={reduceMotion}
-                onReduceMotionChange={onReduceMotionChange}
-              />
-            ) : active.id === "nachrichten" ? (
-              <NachrichtenPanel />
-            ) : active.id === "whispern" ? (
-              <WhisperPanel onOpenWhisperLists={onOpenWhisperLists} />
-            ) : active.id === "downloads" ? (
-              <DownloadsPanel />
-            ) : active.id === "chat" ? (
-              <ChatPanel />
-            ) : active.id === "sicherheit" ? (
-              <SecurityPanel onOpenIdentities={onOpenIdentities} onClearCache={onClearCache} />
-            ) : active.id === "konto" ? (
-              <KontoPanel />
-            ) : active.id === "meldungen" ? (
-              <MeldungenPanel onOpenFavorites={onOpenFavorites} onApplyPackToFavorites={onApplyPackToFavorites} />
-            ) : (
+            {active.id === "audio" ? (
               <>
-                <h3>{t(`options.section.${active.id}`)}</h3>
-                <p className="ts-options-placeholder">{t("options.notImplemented")}</p>
+                <WiedergabePanel audio={audio} />
+                <AufnahmePanel audio={audio} />
+                <WhisperPanel onOpenWhisperLists={onOpenWhisperLists} />
               </>
+            ) : active.id === "hotkeys" ? (
+              <>
+                <HotkeysPanel audio={audio} />
+                {hubPanels.hotkeys}
+              </>
+            ) : active.id === "sounds" ? (
+              <>
+                <SoundsPanel />
+                <MeldungenPanel
+                  onOpenFavorites={onOpenFavorites}
+                  onApplyPackToFavorites={onApplyPackToFavorites}
+                />
+                <NachrichtenPanel />
+                {hubPanels.sounds}
+              </>
+            ) : (
+              hubPanels[active.id]
             )}
           </div>
         </div>
         <div className="ts-dialog-buttons">
           <div className="ts-dialog-buttons-right">
-            <button onClick={onClose}>{t("options.ok")}</button>
-            <button onClick={onClose}>{t("options.cancel")}</button>
+            <span>Changes save automatically.</span>
+            <button onClick={onClose}>Done</button>
           </div>
         </div>
       </div>
@@ -9151,7 +9072,7 @@ function AppInner() {
   const whisperMenuRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("channel");
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+    localStorage.getItem("chips:brightness") === "dark" ? "dark" : localStorage.getItem("chips:brightness") === "light" ? "light" : window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   );
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => loadCustomThemes());
   const [designSelection, setDesignSelection] = useState<string>(() => loadDesignSelection());
@@ -9300,7 +9221,7 @@ function AppInner() {
   const pushToTalkRef = useRef(pushToTalk);
   const pttPressedRef = useRef(false);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
-  const [outputDeviceId, setOutputDeviceId] = useState("");
+  const [outputDeviceId, setOutputDeviceId] = useState(() => localStorage.getItem("chips:output-device") ?? "");
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [inputDeviceId, setInputDeviceId] = useState(() => localStorage.getItem(INPUT_DEVICE_KEY) ?? "");
   const [playbackVolume, setPlaybackVolume] = useState(() => loadNumberPref(PLAYBACK_VOLUME_KEY, 1));
@@ -9653,7 +9574,12 @@ function AppInner() {
   }, [aec3Enabled]);
 
   useEffect(() => {
-    if (inputDeviceId) localStorage.setItem(INPUT_DEVICE_KEY, inputDeviceId);
+    localStorage.setItem("chips:output-device", outputDeviceId);
+    setSoundsOutputDevice(outputDeviceId);
+  }, [outputDeviceId]);
+
+  useEffect(() => {
+    localStorage.setItem(INPUT_DEVICE_KEY, inputDeviceId);
   }, [inputDeviceId]);
 
   useEffect(() => {
@@ -10812,7 +10738,7 @@ function AppInner() {
     wireSocket(sessionId, socket, params);
   };
 
-  // Auto-connect from a ?connect=... share link or a build-time default
+  // Auto-connect from an explicitly saved preference, share link or build-time default
   // server (issue #10). Fires once, after the mandatory first-visit ToS gate
   // (if any) is out of the way, so it never races the gate or connects
   // before the user has had a chance to accept it.
@@ -10822,8 +10748,8 @@ function AppInner() {
     if (autoConnectedRef.current) return;
     if (tosMandatory && tosOpen) return;
     const target = AUTO_CONNECT_FROM_URL ??
-      (DEFAULT_SERVER
-        ? { host: DEFAULT_SERVER, nickname: undefined, defaultChannel: DEFAULT_CHANNEL, privilegeKey: undefined }
+      ((localStorage.getItem("chips:auto-connect") === "on" ? host : DEFAULT_SERVER)
+        ? { host: localStorage.getItem("chips:auto-connect") === "on" ? host : DEFAULT_SERVER!, nickname: undefined, defaultChannel: DEFAULT_CHANNEL, privilegeKey: undefined }
         : null);
     if (!target) return;
     autoConnectedRef.current = true;
@@ -11826,15 +11752,6 @@ function AppInner() {
     setSoundsOutputDevice(deviceId);
   };
 
-  const handlePickOutputDevice = async () => {
-    try {
-      const device = await pickAudioOutputDevice();
-      if (device) await handleOutputDeviceChange(device.deviceId);
-    } catch (error) {
-      appendLog({ text: `Output device error: ${(error as Error).message}`, kind: "error" });
-    }
-  };
-
   const handlePlayTestTone = () => {
     const ctx = ensureAudioContext();
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
@@ -12824,7 +12741,51 @@ function AppInner() {
   const [nameStyle, setNameStyle] = useState<NameStyleConfig>(loadNameStyleConfig);
   const [profileStyle, setProfileStyle] = useState<ProfileStyle>(loadProfileStyle);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
-  const syncProfileToken = (description: string) => { const token = encodeStyleToken(profileStyle); if (description.match(/\[s:v1;[^\]]*\]/)?.[0] !== token) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(description, token) })); };
+  const [autoConnect, setAutoConnect] = useState(
+    () => localStorage.getItem("chips:auto-connect") === "on",
+  );
+  const [glassIntensity, setGlassIntensity] =
+    useState<string>(loadGlassIntensity);
+  const [muteBinding, setMuteBinding] = useState<PttBinding | null>(() =>
+    loadActionBinding("chips:mute-binding"),
+  );
+  const [deafenBinding, setDeafenBinding] = useState<PttBinding | null>(() =>
+    loadActionBinding("chips:deafen-binding"),
+  );
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        !connected ||
+        e.repeat ||
+        optionsDialogOpen ||
+        profileEditorOpen ||
+        (e.target instanceof HTMLElement &&
+          e.target.closest("input,textarea,select,[contenteditable=true]"))
+      )
+        return;
+      if (e.code === muteBinding?.code) {
+        e.preventDefault();
+        void handleToggleMic();
+      } else if (e.code === deafenBinding?.code) {
+        e.preventDefault();
+        handleToggleOutputMuted();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
+
+  const syncProfileToken = (description: string) => {
+    const token = encodeStyleToken(profileStyle);
+    if (description.match(/\[s:v1;[^\]]*\]/)?.[0] !== token)
+      socketRef.current?.send(
+        JSON.stringify({
+          type: "setDescription",
+          description: replaceStyleToken(description, token),
+        }),
+      );
+  };
   const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); const own = clients.find(c => c.id === ownClientId); if (connected && own) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(own.description ?? "", encodeStyleToken(next)) })); };
   // "Reduce animations": the in-app switch, on top of the OS preference that the
   // stylesheet already honours. Freezes every Step 3 effect to a static gradient.
@@ -12853,6 +12814,7 @@ function AppInner() {
       data-design-theme={designTheme}
       data-accent={accent}
       data-motion={reduceMotion ? "reduced" : "full"}
+      data-glass-intensity={glassIntensity}
       style={accentStyle}
     >
       {DEMO_MODE && (
@@ -13157,16 +13119,7 @@ function AppInner() {
           </button>
           {extrasMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setIdentitiesOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">🪪</span>
-                <span className="ts-menu-item-label">{t("menu.extras.identities")}</span>
-              </button>
+
               <button
                 className="ts-menu-item"
                 onClick={() => {
@@ -13209,16 +13162,7 @@ function AppInner() {
                 <span className="ts-menu-item-label">{t("menu.extras.fileTransfers")}</span>
               </button>
               <div className="ts-menu-separator" />
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setWhisperListsOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">🗒️</span>
-                <span className="ts-menu-item-label">{t("menu.extras.whisperLists")}</span>
-              </button>
+
               <button
                 className="ts-menu-item"
                 onClick={() => {
@@ -13320,20 +13264,11 @@ function AppInner() {
                 <span className="ts-menu-item-label">{t("menu.extras.stopRecording")}</span>
               </button>
               <div className="ts-menu-separator" />
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setOptionsDialogOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">⚙️</span>
-                <span className="ts-menu-item-label">{t("menu.extras.options")}</span>
-              </button>
+
             </div>
           )}
         </div>
-        <button type="button" className="ts-menubar-item ts-plain-button" onClick={() => setProfileEditorOpen(true)}>✨ Profile style</button>
+
         {IS_OWN_HOSTED_INSTANCE && (
           <button
             type="button"
@@ -13581,20 +13516,7 @@ function AppInner() {
             >
               🗣️
             </button>
-          ) : continuous ? null : (
-            <label className="ts-icon-slider" title={t("toolbar.vadSensitivity")}>
-              🎚️
-              <input
-                type="range"
-                min={0.002}
-                max={0.15}
-                step={0.002}
-                value={vadThreshold}
-                onChange={(e) => setVadThreshold(Number(e.target.value))}
-                aria-label={t("toolbar.vadSensitivity")}
-              />
-            </label>
-          )}
+          ) : null}
           <button
             className={`ts-icon-button${publishState === "live" ? " ts-mic-on" : ""}`}
             onClick={handleStreamButton}
@@ -13628,43 +13550,12 @@ function AppInner() {
           >
             {outputMuted ? "🔇" : "🔊"}
           </button>
-          {hasNativeOutputPicker() ? (
-            <button className="ts-icon-button" onClick={handlePickOutputDevice} title={t("toolbar.chooseOutputDevice")} aria-label={t("toolbar.chooseOutputDevice")}>
-              🎧
-            </button>
-          ) : (
-            <label className="ts-icon-select">
-              🎧
-              <select
-                value={outputDeviceId}
-                onChange={(e) => handleOutputDeviceChange(e.target.value)}
-                onFocus={refreshOutputDevices}
-                aria-label={t("toolbar.chooseOutputDevice")}
-              >
-                <option value="">{t("playback.systemDefault")}</option>
-                {outputDevices.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Output ${d.deviceId.slice(0, 6)}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           {recording && (
             <button className="ts-icon-button ts-recording-on" onClick={stopRecording} title={t("menu.extras.stopRecording")} aria-label={t("menu.extras.stopRecording")}>
               🔴
             </button>
           )}
           <span className="ts-toolbar-sep" />
-          <button
-            className="ts-icon-button"
-            onClick={() => setTheme((mode) => (mode === "dark" ? "light" : "dark"))}
-            title={t("toolbar.toggleTheme")}
-            aria-label={t("toolbar.toggleTheme")}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
-          <AccentSwitcher accent={accent} onChange={handleAccentChange} />
           <img src={`${import.meta.env.BASE_URL}chips-mark.png`} alt="" className="ts-app-logo" />
           <span className="ts-app-title" role="heading" aria-level={1}>Chips</span>
         </div>
@@ -13707,7 +13598,6 @@ function AppInner() {
           canOpenNewTab={sessionTabs.length > 0 || connected}
           onCancel={novaSplash ? () => {} : () => setConnectDialogOpen(false)}
           nova={designTheme === "nova"}
-          onOpenOptions={() => setOptionsDialogOpen(true)}
         />
       )}
 
@@ -14012,53 +13902,250 @@ function AppInner() {
       )}
 
       {profileEditorOpen && <ProfileStyleEditor value={profileStyle} onChange={updateProfile} onClose={() => setProfileEditorOpen(false)} />}
-      {optionsDialogOpen && (
+      {optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && (
         <OptionsDialog
+          hubPanels={{
+  connection: (
+    <>
+      <h3>Connection</h3>
+      <label className="ts-dialog-field">
+        Server address and port
+        <input
+          value={host}
+          placeholder="wwts.ir:1694"
+          onChange={(e) => {
+            setHost(e.target.value);
+            localStorage.setItem(LAST_HOST_KEY, e.target.value);
+          }}
+        />
+      </label>
+      <label className="ts-dialog-field">
+        Nickname
+        <input
+          value={nickname}
+          onChange={(e) => {
+            setNickname(e.target.value);
+            localStorage.setItem(LAST_NICKNAME_KEY, e.target.value);
+          }}
+        />
+      </label>
+      <label className="ts-dialog-field">
+        Identity
+        <select
+          value={activeIdentityId ?? ""}
+          onChange={(e) => setActiveIdentityId(e.target.value)}
+        >
+          {identities.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button onClick={() => setIdentitiesOpen(true)}>Manage identities</button>
+      <label className="ts-options-checkbox">
+        <input
+          type="checkbox"
+          checked={autoConnect}
+          onChange={(e) => {
+            setAutoConnect(e.target.checked);
+            localStorage.setItem(
+              "chips:auto-connect",
+              e.target.checked ? "on" : "off",
+            );
+          }}
+        />
+        Auto-connect on launch
+      </label>
+      <p>
+        Connection changes apply on the next connection. Passwords are entered
+        in Connect.
+      </p>
+      <button
+        onClick={() => {
+          setOptionsDialogOpen(false);
+          setConnectDialogOpen(true);
+        }}
+      >
+        Open Connect
+      </button>
+      <AnwendungPanel
+        showServerBanner={showServerBanner}
+        onShowServerBannerChange={(on) => {
+          setShowServerBanner(on);
+          localStorage.setItem(SERVER_BANNER_KEY, on ? "on" : "off");
+        }}
+        chatImages={chatImages}
+        onChatImagesChange={(on) => {
+          setChatImages(on);
+          localStorage.setItem(CHAT_IMAGES_KEY, on ? "on" : "off");
+        }}
+      />
+      <SecurityPanel
+        onOpenIdentities={() => setIdentitiesOpen(true)}
+        onClearCache={handleClearCache}
+      />
+      <DownloadsPanel />
+      <KontoPanel />
+    </>
+  ),
+  hotkeys: (
+    <fieldset className="ts-options-fieldset">
+      <legend>Mute & deafen</legend>
+      <p>
+        While Chips is focused. Escape cancels recording. Use keyboard bindings.
+      </p>
+      <label>
+        Mute{" "}
+        <PttKeyButton
+          keyboardOnly
+          binding={muteBinding}
+          onChange={(b) => {
+            if (b.code === deafenBinding?.code || b.code === pttBinding?.code) {
+              alert("Choose a different key: this key is already bound.");
+              return;
+            }
+            setMuteBinding(b);
+            localStorage.setItem("chips:mute-binding", JSON.stringify(b));
+          }}
+        />
+      </label>
+      <button
+        onClick={() => {
+          setMuteBinding(null);
+          localStorage.removeItem("chips:mute-binding");
+        }}
+      >
+        Clear mute
+      </button>
+      <label>
+        Deafen{" "}
+        <PttKeyButton
+          keyboardOnly
+          binding={deafenBinding}
+          onChange={(b) => {
+            if (b.code === muteBinding?.code || b.code === pttBinding?.code) {
+              alert("Choose a different key: this key is already bound.");
+              return;
+            }
+            setDeafenBinding(b);
+            localStorage.setItem("chips:deafen-binding", JSON.stringify(b));
+          }}
+        />
+      </label>
+      <button
+        onClick={() => {
+          setDeafenBinding(null);
+          localStorage.removeItem("chips:deafen-binding");
+        }}
+      >
+        Clear deafen
+      </button>
+    </fieldset>
+  ),
+  sounds: (
+    <p>
+      Desktop notifications are not available in this build; in-app
+      notifications and event sounds are supported.
+    </p>
+  ),
+  design: (
+    <>
+      <h3>Appearance</h3>
+      <DesignPanel
+        designSelection={designSelection}
+        onSelectionChange={handleDesignSelectionChange}
+        customThemes={customThemes}
+        onSaveCustomTheme={handleSaveCustomTheme}
+        onDeleteCustomTheme={handleDeleteCustomTheme}
+        idePixelFont={idePixelFont}
+        onIdePixelFontChange={(on) => {
+          setIdePixelFont(on);
+          localStorage.setItem(IDE_PIXEL_FONT_KEY, on ? "on" : "off");
+        }}
+        reduceMotion={reduceMotion}
+        onReduceMotionChange={handleReduceMotionChange}
+      />
+      <label className="ts-options-checkbox">
+        <input
+          type="checkbox"
+          checked={theme === "dark"}
+          onChange={(e) => {
+            setTheme(e.target.checked ? "dark" : "light");
+            localStorage.setItem(
+              "chips:brightness",
+              e.target.checked ? "dark" : "light",
+            );
+          }}
+        />
+        Dark appearance
+      </label>
+      <h4>Accent</h4>
+      <AccentSwitcher accent={accent} onChange={handleAccentChange} />
+      <label className="ts-dialog-field">
+        Liquid Glass intensity
+        <select
+          value={glassIntensity}
+          onChange={(e) => {
+            setGlassIntensity(e.target.value);
+            localStorage.setItem("chips:glass-intensity", e.target.value);
+          }}
+        >
+          <option value="0">Off</option>
+          <option value="0.5">Subtle</option>
+          <option value="1">Full</option>
+        </select>
+      </label>
+      <label>
+        Name-style default
+        <select
+          value={nameStyle.style}
+          onChange={(e) =>
+            updateProfile({
+              ...profileStyle,
+              name: {
+                ...nameStyle,
+                style: e.target.value as NameStyleConfig["style"],
+              },
+            })
+          }
+        >
+          {NAME_STYLES.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ChatPanel />
+      <p>
+        <strong>Theme files — Step 7 (not implemented).</strong> .chipstheme
+        import/export will live here.
+      </p>
+    </>
+  ),
+  profile: (
+    <>
+      <h3>Profile</h3>
+      <p>
+        Customize your name, avatar, banner, status and card using the existing
+        profile panel.
+      </p>
+      <button onClick={() => setProfileEditorOpen(true)}>
+        Customize profile
+      </button>
+    </>
+  ),
+}}
           onOpenWhisperLists={() => setWhisperListsOpen(true)}
-          onOpenIdentities={() => setIdentitiesOpen(true)}
           onOpenFavorites={openManageFavorites}
           // Native's ✔: the chosen pack becomes every favorite's pack (drop their overrides).
           onApplyPackToFavorites={() => saveFavorites(favorites.map(({ soundPack: _, ...f }) => f))}
-          onClearCache={handleClearCache}
           section={optionsSection}
           onSectionChange={setOptionsSection}
           onClose={() => {
             setOptionsDialogOpen(false);
             if (window.location.hash.startsWith("#options/")) window.history.replaceState(null, "", window.location.pathname + window.location.search);
-          }}
-          designSelection={designSelection}
-          onDesignSelectionChange={handleDesignSelectionChange}
-          customThemes={customThemes}
-          onSaveCustomTheme={handleSaveCustomTheme}
-          onDeleteCustomTheme={handleDeleteCustomTheme}
-          idePixelFont={idePixelFont}
-          onIdePixelFontChange={(on) => {
-            setIdePixelFont(on);
-            try {
-              localStorage.setItem(IDE_PIXEL_FONT_KEY, on ? "on" : "off");
-            } catch {
-              /* private mode: setting just doesn't persist */
-            }
-          }}
-          reduceMotion={reduceMotion}
-          onReduceMotionChange={handleReduceMotionChange}
-          showServerBanner={showServerBanner}
-          onShowServerBannerChange={(on) => {
-            setShowServerBanner(on);
-            try {
-              localStorage.setItem(SERVER_BANNER_KEY, on ? "on" : "off");
-            } catch {
-              /* private mode: setting just doesn't persist */
-            }
-          }}
-          chatImages={chatImages}
-          onChatImagesChange={(on) => {
-            setChatImages(on);
-            try {
-              localStorage.setItem(CHAT_IMAGES_KEY, on ? "on" : "off");
-            } catch {
-              /* private mode: setting just doesn't persist */
-            }
           }}
           audio={{
             outputDevices,
@@ -14093,7 +14180,10 @@ function AppInner() {
             onTypingAttenuationChange: setTypingAttenuation,
             onPushToTalkChange: setPushToTalk,
             pttBinding,
-            onPttBindingChange: setPttBinding,
+            onPttBindingChange: b => {
+              if (b.code === muteBinding?.code || b.code === deafenBinding?.code) { alert("Choose a different key: this key is already bound."); return; }
+              setPttBinding(b);
+            },
             noiseSuppressionEnabled,
             onToggleNoiseSuppression: handleToggleNoiseSuppression,
             echoCancellationEnabled,
@@ -14942,6 +15032,13 @@ function AppInner() {
             </div>
           );
         })}
+      </div>
+      <div className="chips-self-bar" data-lg>
+        <span className="chips-self-avatar">{(nickname || "?").slice(0,1).toUpperCase()}</span>
+        <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
+        <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? "🎙" : "🔇"}</button>
+        <button onClick={handleToggleOutputMuted} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}>🎧</button>
+        <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings">⚙</button>
       </div>
       <NewsTicker />
       {iconPackStyle && <style>{iconPackStyle}</style>}
