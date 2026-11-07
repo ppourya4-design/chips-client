@@ -264,7 +264,9 @@
 }
 
 .ts-app.ts-design-ide .ts-server-row::before {
-  content: "\25BE";
+  content: "";
+  display:inline-block; width:12px; height:12px; background:var(--ide-faint);
+  mask:url("../../public/chevron-down.svg") center / contain no-repeat;
   color: var(--ide-faint);
 }
 
@@ -648,7 +650,7 @@
 }
 
 .ts-app.ts-design-ide .ts-chat-input-row::before {
-  content: "➜ ~/channel";
+  content: "> ~/channel";
   flex-shrink: 0;
   font-weight: 600;
   font-size: 12px;

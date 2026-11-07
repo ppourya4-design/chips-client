@@ -1,3 +1,4 @@
+import { UiIcon } from "./UiIcon";
 import { useT } from "./i18n";
 
 export type ConnectionTabItem = {
@@ -61,7 +62,7 @@ export function ConnectionTabs({
                   onCloseTab(tab.id);
                 }}
               >
-                ×
+                <UiIcon name="close" />
               </span>
             ) : null}
           </div>

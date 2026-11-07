@@ -1,3 +1,7 @@
+import { BROADCAST_KEY, loadBroadcastPreferences } from "./broadcastPreferences";
+import { captureBinding, loadBinding, loadShortcuts, matchesBinding, sameBinding, SHORTCUTS_KEY, type KeyBinding as PttBinding, } from "./hotkeys";
+import { UiIcon } from "./UiIcon";
+import { loadActionBinding, loadGlassIntensity } from "./settings";
 import {
   createContext,
   useCallback,
@@ -140,9 +144,9 @@ import {
   MicCapture,
   SAMPLE_RATE,
   encodeWavStereo,
-  hasNativeOutputPicker,
   listAudioInputDevices,
   listAudioOutputDevices,
+  hasNativeOutputPicker,
   pickAudioOutputDevice,
 } from "./voice";
 import { createAec3, type Aec3Instance } from "./aec3";
@@ -656,23 +660,7 @@ function loadBoolPref(key: string, fallback: boolean): boolean {
   return raw === null ? fallback : raw === "1";
 }
 
-interface PttBinding {
-  code: string;
-  label: string;
-}
-
-function loadPttBinding(): PttBinding | null {
-  try {
-    const v = JSON.parse(localStorage.getItem(PTT_BINDING_KEY) ?? "null");
-    return v && typeof v.code === "string" && typeof v.label === "string" ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-function keyBindingLabel(e: KeyboardEvent): string {
-  return e.key.length === 1 && e.key !== " " ? e.key.toUpperCase() : e.code;
-}
+function loadPttBinding(): PttBinding | null { return loadBinding(PTT_BINDING_KEY); }
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -1265,7 +1253,7 @@ function FileTransfersWindow({
       <div className="ts-dialog-titlebar">
         <span>{t("transfers.title")}</span>
         <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-          ✕
+          <UiIcon name="close" />
         </button>
       </div>
       <div className="ts-dialog-body">
@@ -1276,7 +1264,7 @@ function FileTransfersWindow({
             <tbody>
               {transfers.map((x) => (
                 <tr key={x.id} className={`ts-transfer-${x.status}`}>
-                  <td title={t(`transfers.${x.dir}`)}>{x.dir === "down" ? "⬇" : "⬆"}</td>
+                  <td title={t(`transfers.${x.dir}`)}>{x.dir === "down" ? <UiIcon name="down" /> : <UiIcon name="up" />}</td>
                   <td className="ts-transfers-name" title={x.path}>
                     {x.name}
                   </td>
@@ -1422,13 +1410,13 @@ function ClientStatusIcons({ client }: { client: ClientInfo }) {
   // Mute is shown on the TalkLamp; keep secondary flags here.
   return (
     <span className="ts-status-icons">
-      {client.isChannelCommander && !tree.commanderLamp && <span title={t("tree.channelCommander")}>⭐</span>}
-      {client.away && <span title={t("tree.away")} data-pack-icon="away">💤</span>}
+      {client.isChannelCommander && !tree.commanderLamp && <span title={t("tree.channelCommander")}><UiIcon name="star" /></span>}
+      {client.away && <span title={t("tree.away")} data-pack-icon="away"><UiIcon name="away" /></span>}
       {!client.inputMuted && client.inputHardwareEnabled && !client.hasTalkPower && (
-        <span title={t("tree.noTalkPower")}>🔒</span>
+        <span title={t("tree.noTalkPower")}><UiIcon name="lock" /></span>
       )}
-      {client.outputMuted && <span title={t("tree.soundMuted")} data-pack-icon="soundMuted">🔕</span>}
-      {client.isStreaming && <span title={t("tree.streaming")}>📺</span>}
+      {client.outputMuted && <span title={t("tree.soundMuted")} data-pack-icon="soundMuted"><UiIcon name="volume-off" /></span>}
+      {client.isStreaming && <span title={t("tree.streaming")}><UiIcon name="screen" /></span>}
     </span>
   );
 }
@@ -1727,7 +1715,7 @@ function ChannelTree({
               <span className="ts-tree-label">{channel.name}</span>
             )}
             {!spacer.isSpacer && channel.hasPassword && (
-              <span title={t("tree.passwordProtected")}>🔒</span>
+              <span title={t("tree.passwordProtected")}><UiIcon name="lock" /></span>
             )}
           </div>
           {tree.clientsBelow && subTree}
@@ -1815,7 +1803,7 @@ function ChannelTree({
         );
       })}
     </ul>
-    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile">×</button><div className="chips-profile-banner" style={{background:profileClient.id===ownClientId&&loadProfileStyle().bannerImage?`center/cover url(\"${loadProfileStyle().bannerImage}\")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
+    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile"><UiIcon name="close" /></button><div className="chips-profile-banner" style={{background:profileClient.id===ownClientId&&loadProfileStyle().bannerImage?`center/cover url(\"${loadProfileStyle().bannerImage}\")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
     </>
   );
 }
@@ -1993,10 +1981,10 @@ function InfoPanel({
           <span>{t("info.currentChannels")}</span> <span>{totalChannelCount}</span>
         </div>
         <button className="ts-info-connection-link" onClick={onShowServerConnectionInfo}>
-          🔌 {t("connectionInfo.serverTitle")}
+          <UiIcon name="connect" /> {t("connectionInfo.serverTitle")}
         </button>
         <button className="ts-info-connection-link" onClick={onEditServer}>
-          ✏️ {t("serverEdit.title")}
+          <UiIcon name="edit" /> {t("serverEdit.title")}
         </button>
       </div>
     );
@@ -2197,7 +2185,6 @@ function ConnectDialog({
   onConnectNewTab,
   onCancel,
   nova,
-  onOpenOptions,
   canOpenNewTab,
 }: {
   host: string;
@@ -2228,7 +2215,6 @@ function ConnectDialog({
    *  subtitle, settings shortcut) around the same form instead of the
    *  Standard theme's plain titled dialog box. */
   nova: boolean;
-  onOpenOptions: () => void;
   canOpenNewTab: boolean;
 }) {
   const t = useT();
@@ -2260,18 +2246,7 @@ function ConnectDialog({
 
   const dialogBody = (
     <div className="ts-dialog ts-connect-dialog" onClick={(e) => e.stopPropagation()}>
-      {nova ? (
-        <button className="ts-connect-nova-settings" onClick={onOpenOptions} title={t("menu.extras.options")}>
-          ⚙️
-        </button>
-      ) : (
-        <div className="ts-dialog-titlebar">
-          <span>{t("connect.title")}</span>
-          <button onClick={onCancel} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
-          </button>
-        </div>
-      )}
+      {!nova && <div className="ts-dialog-titlebar"><span>{t("connect.title")}</span><button onClick={onCancel} aria-label="Close Connect"><UiIcon name="close" /></button></div>}
       <div className="ts-dialog-body">
         <div className="ts-dialog-row">
           <label className="ts-dialog-field ts-dialog-field-grow">
@@ -2310,10 +2285,6 @@ function ConnectDialog({
         {expanded && (
             <div className="ts-dialog-grid">
               <label className="ts-dialog-field">
-                {t("connect.phoneticNickname")}
-                <input disabled title={t("clientContext.notSupported")} />
-              </label>
-              <label className="ts-dialog-field">
                 {t("connect.identity")}
                 <select value={activeIdentityId ?? ""} onChange={(e) => onActiveIdentityChange(e.target.value)}>
                   {identities.map((identity) => (
@@ -2328,24 +2299,12 @@ function ConnectDialog({
                 <input value={defaultChannel} onChange={(e) => onDefaultChannelChange(e.target.value)} />
               </label>
               <label className="ts-dialog-field">
-                {t("connect.recordingProfile")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
-                </select>
-              </label>
-              <label className="ts-dialog-field">
                 {t("connect.channelPassword")}
                 <input
                   type="password"
                   value={channelPassword}
                   onChange={(e) => onChannelPasswordChange(e.target.value)}
                 />
-              </label>
-              <label className="ts-dialog-field">
-                {t("connect.playbackProfile")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
-                </select>
               </label>
               <label className="ts-dialog-field">
                 {t("connect.onetimeGrant")}
@@ -2365,18 +2324,6 @@ function ConnectDialog({
                   <option value="auto">{t("connect.serverType.auto")}</option>
                   <option value="teamspeak">{t("connect.serverType.teamspeak")}</option>
                   <option value="teaspeak">{t("connect.serverType.teaspeak")}</option>
-                </select>
-              </label>
-              <label className="ts-dialog-field">
-                {t("connect.hotkeyProfile")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
-                </select>
-              </label>
-              <label className="ts-dialog-field">
-                {t("connect.soundPack")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
                 </select>
               </label>
             </div>
@@ -2676,27 +2623,34 @@ function SegmentedChoice<T extends string | number>({
 
 function StreamSettingsDialog({
   ownName,
+  canStart,
   onStart,
   onCancel,
 }: {
   ownName: string;
+  canStart: boolean;
   onStart: (options: StreamPublishOptions) => void;
   onCancel: () => void;
 }) {
   const t = useT();
   const backdrop = useBackdropDismiss(onCancel);
-  const [preset, setPreset] = useState<string | null>("720");
-  const [source, setSource] = useState<"display" | "camera">("display");
-  const [audio, setAudio] = useState(true);
-  const [accessibility, setAccessibility] = useState<number>(StreamAccess.PUBLIC);
+  const [saved] = useState(loadBroadcastPreferences);
+  const [preset, setPreset] = useState<string | null>(null);
+  const [source, setSource] = useState<"display" | "camera">(saved.source);
+  const [audio, setAudio] = useState(saved.audio);
+  const [accessibility, setAccessibility] = useState<number>(saved.accessibility);
   const [advanced, setAdvanced] = useState(false);
-  const [height, setHeight] = useState(STREAM_PRESETS["720"]!.height);
-  const [fps, setFps] = useState(STREAM_PRESETS["720"]!.fps);
-  const [videoBitrateKbps, setVideoBitrateKbps] = useState(STREAM_PRESETS["720"]!.videoBitrateKbps);
-  const [audioBitrateKbps, setAudioBitrateKbps] = useState(128);
-  const [viewerLimit, setViewerLimit] = useState(0);
-  const [mode, setMode] = useState<number>(StreamMode.P2P);
-  const [contentHint, setContentHint] = useState<"motion" | "detail">("motion");
+  const [height, setHeight] = useState(saved.height);
+  const [fps, setFps] = useState(saved.fps);
+  const [videoBitrateKbps, setVideoBitrateKbps] = useState(saved.videoBitrateKbps);
+  const [audioBitrateKbps, setAudioBitrateKbps] = useState(saved.audioBitrateKbps);
+  const [viewerLimit, setViewerLimit] = useState(saved.viewerLimit);
+  const mode = StreamMode.P2P;
+  const [contentHint, setContentHint] = useState<"motion" | "detail">(saved.contentHint);
+
+  useEffect(() => {
+    localStorage.setItem(BROADCAST_KEY, JSON.stringify({ source, audio, accessibility, height, fps, videoBitrateKbps, audioBitrateKbps, viewerLimit, contentHint }));
+  }, [source,audio,accessibility,height,fps,videoBitrateKbps,audioBitrateKbps,viewerLimit,contentHint]);
 
   const applyPreset = (key: string) => {
     const p = STREAM_PRESETS[key];
@@ -2725,7 +2679,7 @@ function StreamSettingsDialog({
             {t("publish.dialog.title")} <AlphaBadge />
           </span>
           <button onClick={onCancel} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -2738,8 +2692,8 @@ function StreamSettingsDialog({
               value={source}
               onChange={setSource}
               options={[
-                { value: "display", label: `🖥️ ${t("publish.kind.display")}` },
-                { value: "camera", label: `📷 ${t("publish.camera")}` },
+                { value: "display", label: ` ${t("publish.kind.display")}` },
+                { value: "camera", label: ` ${t("publish.camera")}` },
               ]}
             />
           </div>
@@ -2757,21 +2711,19 @@ function StreamSettingsDialog({
             />
           </div>
 
-          <div className="ts-stream-settings-row">
+          {source === "display" && (<div className="ts-stream-settings-row">
             <span>{t("publish.audio")}</span>
             <label
               className="ts-stream-settings-toggle"
-              title={source === "camera" ? t("publish.audio.cameraHint") : undefined}
             >
               <input
                 type="checkbox"
                 checked={audio && source === "display"}
-                disabled={source === "camera"}
                 onChange={(e) => setAudio(e.target.checked)}
               />
               <span />
             </label>
-          </div>
+          </div>)}
 
           <div className="ts-stream-settings-row">
             <span>{t("publish.privacy")}</span>
@@ -2779,9 +2731,9 @@ function StreamSettingsDialog({
               value={accessibility}
               onChange={setAccessibility}
               options={[
-                { value: StreamAccess.PUBLIC, label: `🌐 ${t("publish.privacy.public")}` },
-                { value: StreamAccess.CONTACTS_ONLY, label: `👥 ${t("publish.privacy.contacts")}` },
-                { value: StreamAccess.PRIVATE, label: `🔒 ${t("publish.privacy.private")}` },
+                { value: StreamAccess.PUBLIC, label: ` ${t("publish.privacy.public")}` },
+                { value: StreamAccess.CONTACTS_ONLY, label: ` ${t("publish.privacy.contacts")}` },
+                { value: StreamAccess.PRIVATE, label: ` ${t("publish.privacy.private")}` },
               ]}
             />
           </div>
@@ -2791,7 +2743,7 @@ function StreamSettingsDialog({
             className="ts-stream-settings-section ts-stream-settings-expand"
             onClick={() => setAdvanced((v) => !v)}
           >
-            {t("publish.dialog.advanced")} <span>{advanced ? "⌄" : "›"}</span>
+            {t("publish.dialog.advanced")} <span>{advanced ? <UiIcon name="chevron-down"/> : <UiIcon name="chevron-right"/>}</span>
           </button>
 
           {advanced && (
@@ -2817,8 +2769,8 @@ function StreamSettingsDialog({
               <div className="ts-stream-settings-row">
                 <span>{t("publish.bitrate")}</span>
                 <div className="ts-stream-settings-stepper">
-                  <button type="button" onClick={() => custom(setVideoBitrateKbps)(Math.max(200, videoBitrateKbps - 500))}>
-                    −
+                  <button type="button" aria-label="Decrease video bitrate" onClick={() => custom(setVideoBitrateKbps)(Math.max(200, videoBitrateKbps - 500))}>
+                    <UiIcon name="minus"/>
                   </button>
                   <input
                     type="number"
@@ -2847,8 +2799,8 @@ function StreamSettingsDialog({
               <div className="ts-stream-settings-row">
                 <span>{t("publish.viewerLimit")}</span>
                 <div className="ts-stream-settings-stepper">
-                  <button type="button" onClick={() => setViewerLimit(Math.max(0, viewerLimit - 1))}>
-                    −
+                  <button type="button" aria-label="Decrease viewer limit" onClick={() => setViewerLimit(Math.max(0, viewerLimit - 1))}>
+                    <UiIcon name="minus"/>
                   </button>
                   <input
                     type="number"
@@ -2864,23 +2816,7 @@ function StreamSettingsDialog({
 
               <div className="ts-stream-settings-row">
                 <span>{t("publish.mode")}</span>
-                <SegmentedChoice
-                  value={mode}
-                  onChange={setMode}
-                  options={[
-                    { value: StreamMode.P2P, label: `👥 ${t("publish.mode.p2p")}` },
-                    {
-                      value: StreamMode.SFU,
-                      label: `🖧 ${t("publish.mode.server")}`,
-                      // The SFU path is a different transport entirely
-                      // (requestsfuaccessinfo + mediasoup) and is not built
-                      // yet; offering it would announce a stream nobody can
-                      // watch.
-                      disabled: true,
-                      title: t("publish.mode.serverUnavailable"),
-                    },
-                  ]}
-                />
+                <p>P2P. Server-relayed/SFU broadcasting is not implemented.</p>
               </div>
             </>
           )}
@@ -2888,11 +2824,12 @@ function StreamSettingsDialog({
         <div className="ts-dialog-buttons">
           <div className="ts-dialog-buttons-right">
             <button type="button" onClick={onCancel}>
-              {t("publish.dialog.cancel")}
+              Save and return
             </button>
             <button
               type="button"
               className="ts-stream-settings-go"
+              disabled={!canStart}
               onClick={() =>
                 onStart({
                   name: `${ownName} - ${t(source === "camera" ? "publish.camera" : "publish.screen")}`,
@@ -3053,7 +2990,7 @@ function UpdatePrompt() {
         {t("pwa.reload")}
       </button>
       <button type="button" className="ts-update-toast-dismiss" onClick={snooze}>
-        ✕
+        <UiIcon name="close" />
       </button>
     </div>
   );
@@ -3109,7 +3046,7 @@ function FeedbackFab({ onOpen, stacked }: { onOpen: () => void; stacked: boolean
             }}
             title={t("feedback.dialog.cancel")}
           >
-            ✕
+            <UiIcon name="close" />
           </button>
           {t("feedback.fab.nudge")}
         </div>
@@ -3123,7 +3060,7 @@ function FeedbackFab({ onOpen, stacked }: { onOpen: () => void; stacked: boolean
         }}
         title={t("menu.extras.feedback")}
       >
-        💬
+        <UiIcon name="chat" />
       </button>
     </div>
   );
@@ -3232,7 +3169,7 @@ function NewsTicker() {
           }
         }}
       >
-        ✕
+        <UiIcon name="close" />
       </button>
     </div>
   );
@@ -3249,7 +3186,7 @@ function DonateFab() {
       rel="noopener noreferrer"
       title={t("donate.title")}
     >
-      <span className="ts-donate-fab-icon" aria-hidden="true">☕</span>
+      <span className="ts-donate-fab-icon" aria-hidden="true"><UiIcon name="coffee" /></span>
       {t("donate.label")}
     </a>
   );
@@ -3367,7 +3304,7 @@ function FeedbackDialog({ onClose, audioState }: { onClose: () => void; audioSta
         <div className="ts-dialog-titlebar">
           <span>{t("feedback.dialog.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3556,7 +3493,7 @@ function FavoritesDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("favorites.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-favorites-body">
@@ -3597,10 +3534,6 @@ function FavoritesDialog({
               />
             </label>
             <label className="ts-dialog-field">
-              {t("connect.phoneticNickname")}
-              <input disabled title={t("clientContext.notSupported")} />
-            </label>
-            <label className="ts-dialog-field">
               {t("connect.serverAddress")}
               <input
                 disabled={!selected}
@@ -3637,30 +3570,6 @@ function FavoritesDialog({
           </div>
 
           <div className="ts-favorites-profile-col">
-            <label className="ts-dialog-field">
-              {t("connect.identity")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
-            <label className="ts-dialog-field">
-              {t("connect.recordingProfile")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
-            <label className="ts-dialog-field">
-              {t("connect.playbackProfile")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
-            <label className="ts-dialog-field">
-              {t("connect.hotkeyProfile")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
             <label className="ts-dialog-field">
               {t("connect.soundPack")}
               <select
@@ -3738,7 +3647,7 @@ function CollectedUrlsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("collectedUrls.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3816,7 +3725,7 @@ function InviteFriendDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("inviteFriend.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3911,7 +3820,7 @@ function ClientLogDialog({ entries, onClose }: { entries: ClientLogEntry[]; onCl
         <div className="ts-dialog-titlebar">
           <span>{t("clientLog.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3999,7 +3908,7 @@ function BanListDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("banList.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4080,7 +3989,7 @@ function ComplainListDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("complainList.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4176,7 +4085,7 @@ function OfflineMessagesDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("offlineMessages.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4224,7 +4133,7 @@ function OfflineMessagesDialog({
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.messageId}>
-                    <td>{e.isRead ? "" : "●"}</td>
+                    <td>{e.isRead ? "" : <UiIcon name="unread"/>}</td>
                     <td>
                       <a href="#" onClick={(ev) => { ev.preventDefault(); onSelect(e.messageId); }}>
                         {e.subject}
@@ -4302,7 +4211,7 @@ function GroupAssignDialog({
             {kind === "channel" ? t("groupAssign.channelTitle") : t("groupAssign.serverTitle")} - {clientName}
           </span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4322,7 +4231,7 @@ function GroupAssignDialog({
                       className={`ts-menu-item${assigned ? " ts-group-assign-current" : ""}`}
                       onClick={() => onSelect(g.id, assigned)}
                     >
-                      <span className="ts-menu-item-icon">{assigned ? "✔️" : ""}</span>
+                      <span className="ts-menu-item-icon">{assigned ? <UiIcon name="check" /> : ""}</span>
                       {tree.groupIconsInMenus && g.iconId !== 0 && <GroupIcon group={g} images={iconImages} />}
                       <span className="ts-menu-item-label">{g.name}</span>
                       {kind === "server" && assigned && (
@@ -4371,7 +4280,7 @@ function MoveClientDialog({
             {t("moveClient.title")} - {clientName}
           </span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4393,7 +4302,7 @@ function MoveClientDialog({
                       onClick={() => onSelect(ch.id)}
                     >
                       <span className="ts-menu-item-icon">
-                        {current ? "✔️" : spacer.isSpacer ? "➖" : "📁"}
+                        {current ? <UiIcon name="check" /> : spacer.isSpacer ? <UiIcon name="minus" /> : <UiIcon name="folder" />}
                       </span>
                       <span className="ts-menu-item-label">{label}</span>
                       {current && (
@@ -4487,23 +4396,23 @@ function FileBrowserDialog({
             {t("fileBrowser.title")} - {channelName}
           </span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
           <div className="ts-file-browser-toolbar">
             <button onClick={() => onNavigate(ftParentPath(path))} disabled={path === "/"} title={t("fileBrowser.up")}>
-              ⬆ {t("fileBrowser.up")}
+              <UiIcon name="up" /> {t("fileBrowser.up")}
             </button>
             <span className="ts-file-browser-path">{path}</span>
             <button onClick={onRefresh} title={t("fileBrowser.refresh")}>
-              🔄
+              <UiIcon name="refresh" />
             </button>
             <button onClick={() => setCreatingDir(true)} title={t("fileBrowser.newFolder")}>
-              🗀 {t("fileBrowser.newFolder")}
+              <UiIcon name="folder" /> {t("fileBrowser.newFolder")}
             </button>
             <button onClick={() => fileInputRef.current?.click()} title={t("fileBrowser.upload")}>
-              ⬆️ {t("fileBrowser.upload")}
+              <UiIcon name="up" /> {t("fileBrowser.upload")}
             </button>
             <input
               ref={fileInputRef}
@@ -4575,13 +4484,13 @@ function FileBrowserDialog({
                             />
                           </form>
                         ) : entry.isFile ? (
-                          <span>📄 {entry.name}</span>
+                          <span><UiIcon name="file" /> {entry.name}</span>
                         ) : (
                           <button
                             className="ts-link-button"
                             onClick={() => onNavigate(ftJoinPath(path, entry.name))}
                           >
-                            📁 {entry.name}
+                            <UiIcon name="folder" /> {entry.name}
                           </button>
                         )}
                       </td>
@@ -4590,17 +4499,17 @@ function FileBrowserDialog({
                       <td className="ts-file-browser-actions">
                         {entry.isFile && (
                           <button onClick={() => onDownload(entry)} title={t("fileBrowser.download")}>
-                            ⬇
+                            <UiIcon name="down" />
                           </button>
                         )}
                         <button
                           onClick={() => setRenaming({ entry, value: entry.name })}
                           title={t("fileBrowser.rename")}
                         >
-                          ✏
+                          <UiIcon name="edit" />
                         </button>
                         <button onClick={() => onDelete(entry)} title={t("fileBrowser.delete")}>
-                          🗑
+                          <UiIcon name="trash" />
                         </button>
                       </td>
                     </tr>
@@ -4667,9 +4576,10 @@ function clientAvatarUrl(client: ClientInfo, images: Record<string, string>): st
  *  Talking-reactive style reacts to it, and it only cross-fades a light layer:
  *  the letters never move. See styles/name-effects.css for the motion law. */
 function ProfileStyleEditor({ value, onChange, onClose }: { value: ProfileStyle; onChange: (v: ProfileStyle) => void; onClose: () => void }) {
+  const backdrop = useBackdropDismiss(onClose);
   const setName = (patch: Partial<NameStyleConfig>) => onChange({...value,name:{...value.name,...patch}});
   const file = (text: string) => { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download="styles.json"; a.click(); URL.revokeObjectURL(a.href); };
-  return <div className="ts-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section role="dialog" aria-modal="true" aria-label="Profile style" className="ts-modal" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,bannerImage:String(r.result)});r.readAsDataURL(f);}}}/> <button onClick={()=>onChange({...value,bannerImage:undefined})}>Clear</button></p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
+  return <div className="ts-dialog-backdrop" {...backdrop}><section aria-label="Profile style" className="ts-dialog chips-profile-editor" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:value.bannerImage ? `center/cover url("${value.bannerImage}")` : `linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}>{value.avatarImage && <img src={value.avatarImage} alt="Profile avatar" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>}<NamePlate text="Your name" premium/><div>{value.status || "Custom status"} · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><label>Status <input maxLength={80} value={value.status ?? ""} onChange={e=>onChange({...value,status:e.target.value})}/></label><p>Avatar image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,avatarImage:String(r.result)});r.readAsDataURL(f);}}}/><button onClick={()=>onChange({...value,avatarImage:undefined})}>Clear</button> Banner image <input type="file" accept="image/*" onChange={e=>{const f=e.target.files?.[0];if(f){const r=new FileReader();r.onload=()=>onChange({...value,bannerImage:String(r.result)});r.readAsDataURL(f);}}}/> <button onClick={()=>onChange({...value,bannerImage:undefined})}>Clear</button></p><p>Banner gradient <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
 }
 
 function NamePlate({
@@ -4828,7 +4738,7 @@ function ServerIconsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("serverIcons.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4840,7 +4750,7 @@ function ServerIconsDialog({
               }}
               title={t("serverIcons.upload")}
             >
-              ⬆️ {t("serverIcons.upload")}
+              <UiIcon name="up" /> {t("serverIcons.upload")}
             </button>
             <input
               ref={fileInputRef}
@@ -4899,7 +4809,7 @@ function ServerIconsDialog({
                     )}
                     <span>{entry.name.replace("icon_", "#")}</span>
                     <button onClick={() => onDelete(entry)} title={t("fileBrowser.delete")}>
-                      🗑
+                      <UiIcon name="trash" />
                     </button>
                   </div>
                 );
@@ -5047,7 +4957,7 @@ function PermissionsEditorDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("permsEditor.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-perms-editor-tabs">
@@ -5244,8 +5154,8 @@ function PermissionsEditorDialog({
                             <tr key={`${entry.name}-${i}`} title={entry.description || undefined}>
                               <td>{entry.name}</td>
                               <td>{entry.value}</td>
-                              {showNegated && <td>{entry.negated ? "✔️" : ""}</td>}
-                              {showSkip && <td>{entry.skip ? "✔️" : ""}</td>}
+                              {showNegated && <td>{entry.negated ? <UiIcon name="check" /> : ""}</td>}
+                              {showSkip && <td>{entry.skip ? <UiIcon name="check" /> : ""}</td>}
                               <td>
                                 {catalogEntry && (
                                   <button
@@ -5255,7 +5165,7 @@ function PermissionsEditorDialog({
                                     }}
                                     title={t("fileBrowser.delete")}
                                   >
-                                    🗑
+                                    <UiIcon name="trash" />
                                   </button>
                                 )}
                               </td>
@@ -5309,7 +5219,7 @@ function PermissionOverviewDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("permissionOverview.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5342,8 +5252,8 @@ function PermissionOverviewDialog({
                       <tr key={`${e.name}-${i}`} title={e.description || undefined}>
                         <td>{e.name}</td>
                         <td>{e.value}</td>
-                        <td>{e.negated ? "✔️" : ""}</td>
-                        <td>{e.skip ? "✔️" : ""}</td>
+                        <td>{e.negated ? <UiIcon name="check" /> : ""}</td>
+                        <td>{e.skip ? <UiIcon name="check" /> : ""}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5389,7 +5299,7 @@ function ServerProtocolLogDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("serverProtocolLog.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5439,7 +5349,7 @@ function WhisperHistoryDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("whisperHistory.title", { server: serverName })}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5501,7 +5411,7 @@ function WhisperListsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("whisperLists.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5574,7 +5484,7 @@ function ClientConnectionInfoDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("connectionInfo.clientTitle", { name: clientName })}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5646,7 +5556,7 @@ function ServerConnectionInfoDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("connectionInfo.serverTitle")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5752,7 +5662,6 @@ function IdentitiesDialog({
   onAdd,
   onRename,
   onNicknameChange,
-  onPhoneticChange,
   onDelete,
   onExport,
   onImport,
@@ -5767,7 +5676,6 @@ function IdentitiesDialog({
   onAdd: () => void;
   onRename: (id: string, name: string) => void;
   onNicknameChange: (id: string, value: string) => void;
-  onPhoneticChange: (id: string, value: string) => void;
   onDelete: (id: string) => void;
   onExport: (id: string) => void;
   onImport: (file: File) => void;
@@ -5794,7 +5702,7 @@ function IdentitiesDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("identities.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body ts-identities-body">
@@ -5810,7 +5718,7 @@ function IdentitiesDialog({
                     onClick={() => setSelectedId(identity.id)}
                     title={identity.id === activeId ? t("identities.isDefault") : undefined}
                   >
-                    {identity.id === activeId ? "★ " : ""}
+                    {identity.id === activeId ? <UiIcon name="star" /> : ""}
                     {identity.name}
                   </button>
                 </li>
@@ -5831,13 +5739,7 @@ function IdentitiesDialog({
                     onChange={(e) => onNicknameChange(selected.id, e.target.value)}
                   />
                 </label>
-                <label className="ts-dialog-field">
-                  {t("identities.phoneticNickname")}
-                  <input
-                    value={selected.phoneticName}
-                    onChange={(e) => onPhoneticChange(selected.id, e.target.value)}
-                  />
-                </label>
+
                 <label className="ts-dialog-field">
                   {t("identities.uniqueId")}
                   <input
@@ -5971,7 +5873,7 @@ function ContactsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("contacts.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-contacts-body">
@@ -5999,7 +5901,7 @@ function ContactsDialog({
                   <button type="button" className="ts-plain-button" aria-current={c.uid === selectedUid}>
                     {onlineClients.some((cl) => cl.uid === c.uid) && <span className="ts-contacts-online-dot" />}
                     {displayName(c)}
-                    {c.ignored && " 🚫"}
+                    {c.ignored && <UiIcon name="ban" />}
                   </button>
                 </li>
               ))}
@@ -6029,14 +5931,7 @@ function ContactsDialog({
                 </label>
               ))}
             </div>
-            <label className="ts-dialog-field">
-              {t("contacts.phoneticName")}
-              <input
-                disabled={!selected}
-                value={selected?.phoneticName ?? ""}
-                onChange={(e) => updateSelected({ phoneticName: e.target.value })}
-              />
-            </label>
+
             <label className="ts-dialog-field">
               {t("contacts.whisperSetting")}
               <select
@@ -6114,7 +6009,7 @@ function AwayDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("away.dialog.title")}</span>
           <button onClick={onCancel} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -6160,20 +6055,12 @@ function AwayDialog({
 }
 
 const OPTIONS_SECTIONS = [
-  { id: "anwendung", icon: "🎧" },
-  { id: "konto", icon: "👤" },
-  { id: "wiedergabe", icon: "🔊" },
-  { id: "aufnahme", icon: "🎙️" },
-  { id: "sounds", icon: "🔔" },
-  { id: "design", icon: "🖌️" },
-  { id: "erweiterungen", icon: "🧩" },
-  { id: "hotkeys", icon: "⌨️" },
-  { id: "whispern", icon: "🤫" },
-  { id: "downloads", icon: "⬇️" },
-  { id: "chat", icon: "💬" },
-  { id: "sicherheit", icon: "🛡️" },
-  { id: "nachrichten", icon: "🔤" },
-  { id: "meldungen", icon: "ℹ️" },
+  { id: "connection", icon: "globe", label: "Connection" },
+  { id: "audio", icon: "headphones", label: "Audio" },
+  { id: "hotkeys", icon: "keyboard", label: "Hotkeys" },
+  { id: "sounds", icon: "bell", label: "Notifications & sounds" },
+  { id: "design", icon: "palette", label: "Appearance" },
+  { id: "profile", icon: "user", label: "Profile" },
 ] as const;
 
 interface AudioSettings {
@@ -6181,6 +6068,8 @@ interface AudioSettings {
   outputDeviceId: string;
   onOutputDeviceChange: (id: string, label?: string) => void;
   onRefreshOutputDevices: () => void;
+  onPickOutputDevice: () => void;
+  onEnableCapture: () => void;
   playbackVolume: number;
   onPlaybackVolumeChange: (v: number) => void;
   autoVolume: boolean;
@@ -6209,7 +6098,7 @@ interface AudioSettings {
   typingAttenuation: boolean;
   onTypingAttenuationChange: (on: boolean) => void;
   pttBinding: PttBinding | null;
-  onPttBindingChange: (binding: PttBinding) => void;
+  onPttBindingChange: (binding: PttBinding | null) => void;
   noiseSuppressionEnabled: boolean;
   onToggleNoiseSuppression: () => void;
   echoCancellationEnabled: boolean;
@@ -6221,7 +6110,7 @@ interface AudioSettings {
   onToggleAec3: () => void;
 }
 
-function PttKeyButton({ binding, onChange }: { binding: PttBinding | null; onChange: (b: PttBinding) => void }) {
+function PttKeyButton({ binding, onChange, keyboardOnly = false }: { binding: PttBinding | null; onChange: (b: PttBinding) => void; keyboardOnly?: boolean }) {
   const t = useT();
   const [listening, setListening] = useState(false);
   useEffect(() => {
@@ -6236,22 +6125,29 @@ function PttKeyButton({ binding, onChange }: { binding: PttBinding | null; onCha
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Tab") return setListening(false);
-      take(e, e.key === "Escape" ? undefined : { code: e.code, label: keyBindingLabel(e) });
+      if (/^(Control|Shift|Alt|Meta)(Left|Right)$/.test(e.code)) { e.preventDefault(); return; }
+      take(e, e.key === "Escape" ? undefined : captureBinding(e));
     };
     const onMouse = (e: MouseEvent) => {
       // Left click is how you started (and how you click away), so it can't be PTT.
       if (e.button === 0) return setListening(false);
+      if (keyboardOnly) return;
       take(e, { code: `Mouse${e.button}`, label: `Mouse ${e.button + 1}` });
       // The back/forward side buttons navigate on release; keep the page.
       window.addEventListener("mouseup", (up) => up.preventDefault(), { capture: true, once: true });
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (/^(Control|Shift|Alt|Meta)(Left|Right)$/.test(e.code)) take(e, captureBinding(e));
+    };
+    window.addEventListener("keyup", onKeyUp, true);
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousedown", onMouse, true);
     return () => {
+      window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("mousedown", onMouse, true);
     };
-  }, [listening, onChange]);
+  }, [listening, onChange, keyboardOnly]);
   return (
     <button className={listening ? "ts-ptt-key-listening" : undefined} onClick={() => setListening(true)}>
       {listening ? t("recording.pttKeyPress") : (binding?.label ?? t("recording.pttKeyNone"))}
@@ -6273,32 +6169,11 @@ function HotkeysPanel({ audio }: { audio: AudioSettings }) {
         </label>
         <div className="ts-options-field-row">
           {t("recording.pttKey")}
-          <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} />
+          <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} /><button onClick={() => audio.onPttBindingChange(null)}>Clear push-to-talk</button>
         </div>
         <p className="ts-options-hint">{t("recording.pttHint")}</p>
       </fieldset>
-      <fieldset className="ts-options-fieldset">
-        <legend>{t("hotkeys.shortcuts")}</legend>
-        <table className="ts-hotkeys-table">
-          <tbody>
-            {(
-              [
-                ["Ctrl + S", "menu.connections.connect"],
-                ["Ctrl + D", "menu.connections.disconnectCurrent"],
-                ["Ctrl + B", "menu.favorites.add"],
-              ] as const
-            ).map(([keys, label]) => (
-              <tr key={keys}>
-                <td>
-                  <kbd>{keys}</kbd>
-                </td>
-                <td>{t(label)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="ts-options-hint">{t("hotkeys.shortcutsHint")}</p>
-      </fieldset>
+      <p>Bindings work while Chips is focused. Capture a key, modifier chord, or a bare modifier on release. Escape cancels; Tab leaves capture. PTT also supports middle/side mouse buttons. Every action can be cleared.</p>
     </>
   );
 }
@@ -6375,6 +6250,7 @@ function WiedergabePanel({ audio }: { audio: AudioSettings }) {
               {volumeDb} dB
             </span>
           </div>
+          {hasNativeOutputPicker() && <button onClick={audio.onPickOutputDevice}>Choose output device with system picker</button>}
           <button onClick={audio.onPlayTestTone}>{t("playback.playTestTone")}</button>
           <fieldset className="ts-options-fieldset">
             <legend>{t("playback.options")}</legend>
@@ -6399,9 +6275,11 @@ function WiedergabePanel({ audio }: { audio: AudioSettings }) {
 
 function AufnahmePanel({ audio }: { audio: AudioSettings }) {
   const t = useT();
+  const supported = navigator.mediaDevices?.getSupportedConstraints() ?? {};
   return (
     <>
       <h3>{t("recording.title")}</h3>
+      {!audio.micOn && <button onClick={audio.onEnableCapture}>Enable microphone for setup and testing</button>}
       <p className="ts-options-subtitle">{t("recording.subtitle")}</p>
       <div className="ts-options-columns">
         <ul className="ts-options-profile-list">
@@ -6438,7 +6316,7 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
               <>
                 <div className="ts-options-field-row">
                   {t("recording.pttKey")}
-                  <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} />
+                  <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} /><button onClick={() => audio.onPttBindingChange(null)}>Clear push-to-talk</button>
                 </div>
                 <p className="ts-options-hint">{t("recording.pttHint")}</p>
               </>
@@ -6500,6 +6378,7 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
           </fieldset>
           <fieldset className="ts-options-fieldset">
             <legend>{t("recording.dsp")}</legend>
+            <p>Native echo cancellation, noise suppression and automatic gain control use WebView2 getUserMedia processing. Unsupported runtime constraints are hidden. AEC3 is the bundled WebRTC WASM echo canceller; it replaces native echo cancellation. Typing attenuation and VAD run locally in Chips.</p>
             <div className="ts-options-dsp-grid">
               <label className="ts-options-checkbox">
                 <input
@@ -6509,7 +6388,7 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
                 />
                 {t("recording.typingAttenuation")}
               </label>
-              <label className="ts-options-checkbox">
+              {supported.echoCancellation && (<label className="ts-options-checkbox">
                 <input
                   type="checkbox"
                   checked={audio.echoCancellationEnabled}
@@ -6517,23 +6396,23 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
                   onChange={audio.onToggleEchoCancellation}
                 />
                 {t("recording.echoCancellation")}
-              </label>
-              <label className="ts-options-checkbox">
+              </label>)}
+              {supported.noiseSuppression && (<label className="ts-options-checkbox">
                 <input
                   type="checkbox"
                   checked={audio.noiseSuppressionEnabled}
                   onChange={audio.onToggleNoiseSuppression}
                 />
                 {t("recording.noiseSuppression")}
-              </label>
-              <label className="ts-options-checkbox">
+              </label>)}
+              {supported.autoGainControl && (<label className="ts-options-checkbox">
                 <input
                   type="checkbox"
                   checked={audio.autoGainControlEnabled}
                   onChange={audio.onToggleAutoGainControl}
                 />
                 {t("recording.autoGainControl")}
-              </label>
+              </label>)}
               <label className="ts-options-checkbox">
                 <input
                   type="checkbox"
@@ -6603,11 +6482,6 @@ function AnwendungPanel({
             <label className="ts-options-radio">
               <input type="radio" name="ts-app-subscribe" checked readOnly />
               {t("app.subscribe.all")}
-            </label>
-            {/* The connector always subscribes everything; "current only" needs connector work. */}
-            <label className="ts-options-radio ts-options-disabled" title={t("design.notAvailable")}>
-              <input type="radio" name="ts-app-subscribe" disabled />
-              {t("app.subscribe.current")}
             </label>
           </fieldset>
         </div>
@@ -7093,12 +6967,7 @@ function DownloadsPanel() {
           <legend>{t("downloadSettings.directory")}</legend>
           <div className="ts-download-dir">
             {t("downloadSettings.directoryLabel")} <strong>{downloadDir?.name ?? t("downloadSettings.browserDefault")}</strong>
-            <button
-              disabled={!canPickFolder}
-              onClick={() => void pickDownloadDir().then((dir) => dir && setDownloadDir(dir))}
-            >
-              {t("downloadSettings.change")}
-            </button>
+            {canPickFolder && <button onClick={() => void pickDownloadDir().then((dir) => dir && setDownloadDir(dir))}>{t("downloadSettings.change")}</button>}
             {downloadDir && (
               <button onClick={() => void clearDownloadDir().then(() => setDownloadDir(null))}>
                 {t("downloadSettings.reset")}
@@ -7109,15 +6978,14 @@ function DownloadsPanel() {
             <input type="radio" checked={downloads.saveMode === "dir"} onChange={() => set({ saveMode: "dir" })} />
             {t("downloadSettings.alwaysDir")}
           </label>
-          <label className="ts-options-radio">
+          {canPickFolder && <label className="ts-options-radio">
             <input
               type="radio"
-              disabled={!canPickFolder}
               checked={downloads.saveMode === "ask"}
               onChange={() => set({ saveMode: "ask" })}
             />
             {t("downloadSettings.askEachTime")}
-          </label>
+          </label>}
           {!canPickFolder && <p className="ts-options-hint">{t("downloadSettings.unsupported")}</p>}
         </fieldset>
         <fieldset className="ts-options-fieldset">
@@ -7229,7 +7097,7 @@ function ChatPanel() {
               aria-label={t("chatSettings.fontReset")}
               onClick={() => set({ fontFamily: "", fontSize: 0 })}
             >
-              ↻
+              <UiIcon name="refresh" />
             </button>
           </div>
           <div
@@ -7504,7 +7372,7 @@ function MeldungenPanel({
               />
               {script && (
                 <button title={t("sounds.test")} onClick={() => void runSoundScript(script, settings.pack)}>
-                  ▶
+                  <UiIcon name="play" />
                 </button>
               )}
             </span>
@@ -7549,7 +7417,7 @@ function MeldungenPanel({
         <td style={indent} colSpan={3}>
           <span className="ts-notify-action">
             <button className="ts-notify-twisty" onClick={toggle}>
-              {expanded ? "▾" : "▸"}
+              {expanded ? <UiIcon name="minus" /> : <UiIcon name="play" />}
             </button>
             {!special && (
               <input
@@ -7585,10 +7453,10 @@ function MeldungenPanel({
               if (window.confirm(t("notify.applyToFavoritesConfirm"))) onApplyPackToFavorites();
             }}
           >
-            ✔
+            <UiIcon name="check" />
           </button>
           <button title={t("notify.importPack")} onClick={() => fileRef.current?.click()}>
-            📂
+            <UiIcon name="folder" />
           </button>
           {pack && (
             <button
@@ -7599,7 +7467,7 @@ function MeldungenPanel({
                 save({ ...settings, pack: BUILTIN_PACK });
               }}
             >
-              🗑
+              <UiIcon name="trash" />
             </button>
           )}
           <input
@@ -7653,6 +7521,22 @@ function MeldungenPanel({
       </div>
     </>
   );
+}
+
+/** The existing icon-pack storage/parser, reachable without the deferred theme manager. */
+function IconPackPanel() {
+  const prefs = useContext(DisplayPrefsContext);
+  const [error, setError] = useState("");
+  return <fieldset className="ts-options-fieldset"><legend>Vector icon packs</legend>
+    <p>Import matching TeamSpeak SVG icons in a .ts3_iconpack or ZIP. Raster-only packs are not accepted under the vector-icon policy.</p>
+    <label className="ts-dialog-field">Import SVG icon pack<input type="file" accept=".ts3_iconpack,.zip" onChange={async e=>{
+      const file=e.target.files?.[0];e.target.value="";if(!file)return;
+      try { const pack=await parseIconPack(file); if(!pack){setError("No matching SVG icons found.");return;} prefs.saveIconPacks([...prefs.iconPacks,pack]);prefs.setIconPackId(pack.id);setError(""); }
+      catch { setError("Could not read this icon pack."); }
+    }}/></label>
+    {error && <p role="alert">{error}</p>}
+    {prefs.iconPacks.map(pack=><div className="ts-options-field-row" key={pack.id}><span>{pack.name}</span><button onClick={()=>{prefs.saveIconPacks(prefs.iconPacks.filter(p=>p.id!==pack.id));if(prefs.iconPackId===pack.id)prefs.setIconPackId("");}}>Delete {pack.name}</button></div>)}
+  </fieldset>;
 }
 
 function DesignPanel({
@@ -7811,7 +7695,7 @@ function DesignPanel({
       <>
         <h3>{t("design.manage.title")}</h3>
         <button className="ts-design-back" onClick={() => setManageOpen(false)}>
-          ← {t("design.store.back")}
+          <UiIcon name="back"/> {t("design.store.back")}
         </button>
       <div className="ts-design-theme-grid">
         {builtins.map((th) => (
@@ -7946,12 +7830,7 @@ function DesignPanel({
     </label>
   );
   // ponytail: these need data the connector doesn't forward yet (client_badges, group types).
-  const unavailableCheckbox = (label: string) => (
-    <label className="ts-options-checkbox ts-options-disabled" title={t("design.notAvailable")}>
-      <input type="checkbox" disabled />
-      {label}
-    </label>
-  );
+
 
   return (
     <>
@@ -7997,8 +7876,8 @@ function DesignPanel({
               </select>
             </label>
             <div className="ts-design-custom-actions">
-              <button onClick={() => setManageOpen(true)}>{t("design.manage")}</button>
-              {!isTauri() && <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>}
+              {/* Legacy theme tooling is not exposed; Step 7 owns theme files. */}
+
             </div>
           </fieldset>
           <fieldset className="ts-options-fieldset">
@@ -8056,10 +7935,7 @@ function DesignPanel({
             </label>
             {treeCheckbox("clientsBelow", t("design.tree.clientsBelow"))}
             {treeCheckbox("flags", t("design.tree.flags"))}
-            {unavailableCheckbox(t("design.tree.overwolf"))}
-            {unavailableCheckbox(t("design.tree.badges"))}
             {treeCheckbox("groupIconsInMenus", t("design.tree.groupIconsInMenus"))}
-            {unavailableCheckbox(t("design.tree.hideInaccessibleGroups"))}
             {treeCheckbox("commanderLamp", t("design.tree.commanderLamp"))}
             {treeCheckbox("awayMessage", t("design.tree.awayMessage"))}
             {treeCheckbox("tooltips", t("design.tree.tooltips"))}
@@ -8216,7 +8092,7 @@ function DesignStorePanel({
     <>
       <div className="ts-design-store-header">
         <button className="ts-design-store-back" onClick={onClose}>
-          ← {t("design.store.back")}
+          <UiIcon name="back"/> {t("design.store.back")}
         </button>
         <h3>{t("design.store.title")}</h3>
       </div>
@@ -8252,7 +8128,7 @@ function DesignStorePanel({
                       onClick={() => handleRate(theme.id, star)}
                       title={t("design.store.rating.rate", { stars: String(star) })}
                     >
-                      {star <= Math.round(theme.rating.average) ? "★" : "☆"}
+                      {star <= Math.round(theme.rating.average) ? <UiIcon name="star" /> : <UiIcon name="star" />}
                     </button>
                   ))}
                   <span className="ts-design-theme-card-rating-count">
@@ -8612,62 +8488,47 @@ function NachrichtenPanel() {
 }
 
 function OptionsDialog({
+  hubPanels,
   section,
   onSectionChange,
   onClose,
   audio,
-  designSelection,
-  onDesignSelectionChange,
-  customThemes,
-  onSaveCustomTheme,
-  onDeleteCustomTheme,
-  idePixelFont,
-  onIdePixelFontChange,
-  reduceMotion,
-  onReduceMotionChange,
-  showServerBanner,
-  onShowServerBannerChange,
-  chatImages,
-  onChatImagesChange,
   onOpenWhisperLists,
-  onOpenIdentities,
-  onClearCache,
   onOpenFavorites,
   onApplyPackToFavorites,
 }: {
+  hubPanels: Record<string, React.ReactNode>;
   section: string;
   onSectionChange: (id: string) => void;
   onClose: () => void;
   audio: AudioSettings;
-  designSelection: string;
-  onDesignSelectionChange: (next: string) => void;
-  customThemes: CustomTheme[];
-  onSaveCustomTheme: (theme: CustomTheme) => void;
-  onDeleteCustomTheme: (id: string) => void;
-  idePixelFont: boolean;
-  onIdePixelFontChange: (on: boolean) => void;
-  reduceMotion: boolean;
-  onReduceMotionChange: (on: boolean) => void;
-  showServerBanner: boolean;
-  onShowServerBannerChange: (on: boolean) => void;
-  chatImages: boolean;
-  onChatImagesChange: (on: boolean) => void;
   onOpenWhisperLists: () => void;
-  onOpenIdentities: () => void;
-  onClearCache: () => void;
   onOpenFavorites: () => void;
   onApplyPackToFavorites: () => void;
 }) {
   const t = useT();
-  const active = OPTIONS_SECTIONS.find((s) => s.id === section) ?? OPTIONS_SECTIONS[0];
+  const active =
+    OPTIONS_SECTIONS.find((s) => s.id === section) ?? OPTIONS_SECTIONS[0];
   const backdrop = useBackdropDismiss(onClose);
   return (
-    <div className="ts-dialog-backdrop" {...backdrop}>
-      <div className="ts-dialog ts-options-dialog" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="ts-dialog-backdrop"
+      {...backdrop}
+      aria-label="Chips settings"
+    >
+      <div
+        aria-label="Chips settings"
+        className="ts-dialog ts-options-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="ts-dialog-titlebar">
-          <span>{t("options.title")}</span>
-          <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+          <span>Chips settings</span>
+          <button
+            onClick={onClose}
+            title={t("dialog.close")}
+            aria-label={t("dialog.close")}
+          >
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-options-body">
@@ -8678,65 +8539,43 @@ function OptionsDialog({
                 className={`ts-options-sidebar-item${s.id === active.id ? " ts-options-sidebar-item-active" : ""}`}
                 onClick={() => onSectionChange(s.id)}
               >
-                <span className="ts-options-sidebar-icon">{s.icon}</span>
-                <span>{t(`options.section.${s.id}`)}</span>
+                <span className="ts-options-sidebar-icon"><UiIcon name={s.icon} /></span>
+                <span>{s.label}</span>
               </button>
             ))}
           </div>
           <div className="ts-options-content">
-            {active.id === "anwendung" ? (
-              <AnwendungPanel
-                showServerBanner={showServerBanner}
-                onShowServerBannerChange={onShowServerBannerChange}
-                chatImages={chatImages}
-                onChatImagesChange={onChatImagesChange}
-              />
-            ) : active.id === "wiedergabe" ? (
-              <WiedergabePanel audio={audio} />
-            ) : active.id === "aufnahme" ? (
-              <AufnahmePanel audio={audio} />
-            ) : active.id === "hotkeys" ? (
-              <HotkeysPanel audio={audio} />
-            ) : active.id === "sounds" ? (
-              <SoundsPanel />
-            ) : active.id === "design" ? (
-              <DesignPanel
-                designSelection={designSelection}
-                onSelectionChange={onDesignSelectionChange}
-                customThemes={customThemes}
-                onSaveCustomTheme={onSaveCustomTheme}
-                onDeleteCustomTheme={onDeleteCustomTheme}
-                idePixelFont={idePixelFont}
-                onIdePixelFontChange={onIdePixelFontChange}
-                reduceMotion={reduceMotion}
-                onReduceMotionChange={onReduceMotionChange}
-              />
-            ) : active.id === "nachrichten" ? (
-              <NachrichtenPanel />
-            ) : active.id === "whispern" ? (
-              <WhisperPanel onOpenWhisperLists={onOpenWhisperLists} />
-            ) : active.id === "downloads" ? (
-              <DownloadsPanel />
-            ) : active.id === "chat" ? (
-              <ChatPanel />
-            ) : active.id === "sicherheit" ? (
-              <SecurityPanel onOpenIdentities={onOpenIdentities} onClearCache={onClearCache} />
-            ) : active.id === "konto" ? (
-              <KontoPanel />
-            ) : active.id === "meldungen" ? (
-              <MeldungenPanel onOpenFavorites={onOpenFavorites} onApplyPackToFavorites={onApplyPackToFavorites} />
-            ) : (
+            {active.id === "audio" ? (
               <>
-                <h3>{t(`options.section.${active.id}`)}</h3>
-                <p className="ts-options-placeholder">{t("options.notImplemented")}</p>
+                <WiedergabePanel audio={audio} />
+                <AufnahmePanel audio={audio} />
+                <WhisperPanel onOpenWhisperLists={onOpenWhisperLists} />
+                {hubPanels.audio}
               </>
+            ) : active.id === "hotkeys" ? (
+              <>
+                <HotkeysPanel audio={audio} />
+                {hubPanels.hotkeys}
+              </>
+            ) : active.id === "sounds" ? (
+              <>
+                <SoundsPanel />
+                <MeldungenPanel
+                  onOpenFavorites={onOpenFavorites}
+                  onApplyPackToFavorites={onApplyPackToFavorites}
+                />
+                <NachrichtenPanel />
+                {hubPanels.sounds}
+              </>
+            ) : (
+              hubPanels[active.id]
             )}
           </div>
         </div>
         <div className="ts-dialog-buttons">
           <div className="ts-dialog-buttons-right">
-            <button onClick={onClose}>{t("options.ok")}</button>
-            <button onClick={onClose}>{t("options.cancel")}</button>
+            <span>Changes save automatically.</span>
+            <button onClick={onClose}>Done</button>
           </div>
         </div>
       </div>
@@ -8829,7 +8668,7 @@ function ServerEditDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("serverEdit.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-options-body">
@@ -9151,7 +8990,7 @@ function AppInner() {
   const whisperMenuRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("channel");
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+    localStorage.getItem("chips:brightness") === "dark" ? "dark" : localStorage.getItem("chips:brightness") === "light" ? "light" : window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   );
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => loadCustomThemes());
   const [designSelection, setDesignSelection] = useState<string>(() => loadDesignSelection());
@@ -9286,7 +9125,7 @@ function AppInner() {
   const [micOn, setMicOn] = useState(false);
   const [talkers, setTalkers] = useState<Set<number>>(new Set());
   const [selfActive, setSelfActive] = useState(false);
-  const [vadThreshold, setVadThreshold] = useState(0.02);
+  const [vadThreshold, setVadThreshold] = useState(() => loadNumberPref("chips:vad-threshold", 0.02));
   const [vadHangover, setVadHangover] = useState(() => loadNumberPref(VAD_HANGOVER_KEY, 0.3));
   const [pushToTalk, setPushToTalk] = useState(() => loadBoolPref(PUSH_TO_TALK_KEY, false));
   // Only matters while pushToTalk is off: send all the time instead of voice activation.
@@ -9295,12 +9134,13 @@ function AppInner() {
   const [typingAttenuation, setTypingAttenuation] = useState(() => loadBoolPref(TYPING_ATTENUATION_KEY, false));
   const typingAttenuationRef = useRef(typingAttenuation);
   const [pttBinding, setPttBinding] = useState<PttBinding | null>(loadPttBinding);
+  const [shortcutBindings, setShortcutBindings] = useState(loadShortcuts);
   const [pttPressed, setPttPressed] = useState(false);
   // Read when a new MicCapture is created, which happens outside render.
   const pushToTalkRef = useRef(pushToTalk);
   const pttPressedRef = useRef(false);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
-  const [outputDeviceId, setOutputDeviceId] = useState("");
+  const [outputDeviceId, setOutputDeviceId] = useState(() => localStorage.getItem("chips:output-device") ?? "");
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [inputDeviceId, setInputDeviceId] = useState(() => localStorage.getItem(INPUT_DEVICE_KEY) ?? "");
   const [playbackVolume, setPlaybackVolume] = useState(() => loadNumberPref(PLAYBACK_VOLUME_KEY, 1));
@@ -9533,6 +9373,7 @@ function AppInner() {
 
   useEffect(() => {
     if (micCaptureRef.current) micCaptureRef.current.threshold = vadThreshold;
+    localStorage.setItem("chips:vad-threshold", String(vadThreshold));
   }, [vadThreshold]);
 
   useEffect(() => {
@@ -9572,6 +9413,7 @@ function AppInner() {
 
   useEffect(() => {
     if (pttBinding) localStorage.setItem(PTT_BINDING_KEY, JSON.stringify(pttBinding));
+    else localStorage.removeItem(PTT_BINDING_KEY);
   }, [pttBinding]);
 
   // Browsers only deliver keys while this tab has focus - there's no global
@@ -9579,14 +9421,14 @@ function AppInner() {
   useEffect(() => {
     if (!pushToTalk || !pttBinding) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== pttBinding.code || e.defaultPrevented) return;
+      if (!matchesBinding(pttBinding, e) || e.defaultPrevented) return;
       // A letter key still has to type in chat; F-keys or modifiers work anywhere.
       if (e.key.length === 1 && isTypingTarget(e.target)) return;
       if (!isTypingTarget(e.target)) e.preventDefault();
       setPttPressed(true);
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === pttBinding.code) setPttPressed(false);
+      if (e.code === pttBinding.code || /^(Control|Shift|Alt|Meta)(Left|Right)$/.test(e.code)) setPttPressed(false);
     };
     // preventDefault: no middle-click autoscroll, no back/forward navigation
     // from the side buttons (which fires on release).
@@ -9653,7 +9495,12 @@ function AppInner() {
   }, [aec3Enabled]);
 
   useEffect(() => {
-    if (inputDeviceId) localStorage.setItem(INPUT_DEVICE_KEY, inputDeviceId);
+    localStorage.setItem("chips:output-device", outputDeviceId);
+    setSoundsOutputDevice(outputDeviceId);
+  }, [outputDeviceId]);
+
+  useEffect(() => {
+    localStorage.setItem(INPUT_DEVICE_KEY, inputDeviceId);
   }, [inputDeviceId]);
 
   useEffect(() => {
@@ -10812,7 +10659,7 @@ function AppInner() {
     wireSocket(sessionId, socket, params);
   };
 
-  // Auto-connect from a ?connect=... share link or a build-time default
+  // Auto-connect from an explicitly saved preference, share link or build-time default
   // server (issue #10). Fires once, after the mandatory first-visit ToS gate
   // (if any) is out of the way, so it never races the gate or connects
   // before the user has had a chance to accept it.
@@ -10822,8 +10669,8 @@ function AppInner() {
     if (autoConnectedRef.current) return;
     if (tosMandatory && tosOpen) return;
     const target = AUTO_CONNECT_FROM_URL ??
-      (DEFAULT_SERVER
-        ? { host: DEFAULT_SERVER, nickname: undefined, defaultChannel: DEFAULT_CHANNEL, privilegeKey: undefined }
+      ((localStorage.getItem("chips:auto-connect") === "on" ? host : DEFAULT_SERVER)
+        ? { host: localStorage.getItem("chips:auto-connect") === "on" ? host : DEFAULT_SERVER!, nickname: undefined, defaultChannel: DEFAULT_CHANNEL, privilegeKey: undefined }
         : null);
     if (!target) return;
     autoConnectedRef.current = true;
@@ -11062,6 +10909,7 @@ function AppInner() {
   };
 
   const openAddFavorite = () => {
+    setOptionsSection("connection"); setOptionsDialogOpen(true);
     setFavoritesDialogMode({
       kind: "add",
       prefill: {
@@ -11077,6 +10925,7 @@ function AppInner() {
   };
 
   const openManageFavorites = () => {
+    setOptionsSection("connection"); setOptionsDialogOpen(true);
     setFavoritesDialogMode({ kind: "manage" });
     setFavoritesMenuOpen(false);
   };
@@ -11480,17 +11329,17 @@ function AppInner() {
   // registered once yet always sees current state.
   const shortcutHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
   shortcutHandlerRef.current = (e: KeyboardEvent) => {
-    if (!e.ctrlKey) return;
+    if (e.defaultPrevented || e.repeat || document.querySelector("[role=dialog]")) return;
     // Typing in a field (chat, dialogs) must never trigger e.g. Ctrl+D.
     const el = e.target as HTMLElement | null;
     if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-    if (e.key.toLowerCase() === "s" && !connecting) {
+    if (matchesBinding(shortcutBindings.connect, e) && !connecting) {
       e.preventDefault();
       setConnectDialogOpen(true);
-    } else if (e.key.toLowerCase() === "d" && (connected || sessionTabs.length > 0)) {
+    } else if (matchesBinding(shortcutBindings.disconnect, e) && (connected || sessionTabs.length > 0)) {
       e.preventDefault();
       handleDisconnect();
-    } else if (e.key.toLowerCase() === "b") {
+    } else if (matchesBinding(shortcutBindings.preset, e)) {
       e.preventDefault();
       openAddFavorite();
     }
@@ -11730,6 +11579,20 @@ function AppInner() {
     if (inputNode) micCaptureRef.current?.setMonitoring(next, inputNode);
   };
 
+  // Deafen is a runtime action, not a saved preference. Restore the prior
+  // microphone mute state rather than unexpectedly opening the mic.
+  const preDeafenInputMutedRef = useRef<boolean | null>(null);
+  const handleToggleDeafen = () => {
+    const deafening = !outputMutedRef.current;
+    const input = deafening ? true : (preDeafenInputMutedRef.current ?? inputMutedRef.current);
+    if (deafening) preDeafenInputMutedRef.current = inputMutedRef.current;
+    else preDeafenInputMutedRef.current = null;
+    inputMutedRef.current = input;
+    socketRef.current?.send(JSON.stringify({ type: "setInputMuted", muted: input }));
+    socketRef.current?.send(JSON.stringify({ type: "setOutputMuted", muted: deafening }));
+    void notify(deafening ? "SOUND_PLAYBACK_MUTED" : "SOUND_PLAYBACK_UNMUTED");
+  };
+
   const handleToggleOutputMuted = () => {
     socketRef.current?.send(JSON.stringify({ type: "setOutputMuted", muted: !outputMutedRef.current }));
     void notify(outputMutedRef.current ? "SOUND_PLAYBACK_UNMUTED" : "SOUND_PLAYBACK_MUTED");
@@ -11824,15 +11687,6 @@ function AppInner() {
     setOutputDeviceId(deviceId);
     await audioPlayerRef.current?.setOutputDevice(deviceId);
     setSoundsOutputDevice(deviceId);
-  };
-
-  const handlePickOutputDevice = async () => {
-    try {
-      const device = await pickAudioOutputDevice();
-      if (device) await handleOutputDeviceChange(device.deviceId);
-    } catch (error) {
-      appendLog({ text: `Output device error: ${(error as Error).message}`, kind: "error" });
-    }
   };
 
   const handlePlayTestTone = () => {
@@ -11997,9 +11851,7 @@ function AppInner() {
     if (id === activeIdentityId) setNickname(value);
   };
 
-  const handleIdentityPhoneticChange = (id: string, value: string) => {
-    setIdentities((prev) => prev.map((i) => (i.id === id ? { ...i, phoneticName: value } : i)));
-  };
+
 
   const handleDeleteIdentity = (id: string) => {
     setIdentities((prev) => {
@@ -12202,6 +12054,7 @@ function AppInner() {
       handleStopPublishing();
       return;
     }
+    setOptionsSection("audio"); setOptionsDialogOpen(true);
     setStreamSettingsOpen(true);
   };
 
@@ -12824,7 +12677,68 @@ function AppInner() {
   const [nameStyle, setNameStyle] = useState<NameStyleConfig>(loadNameStyleConfig);
   const [profileStyle, setProfileStyle] = useState<ProfileStyle>(loadProfileStyle);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
-  const syncProfileToken = (description: string) => { const token = encodeStyleToken(profileStyle); if (description.match(/\[s:v1;[^\]]*\]/)?.[0] !== token) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(description, token) })); };
+  const [autoConnect, setAutoConnect] = useState(
+    () => localStorage.getItem("chips:auto-connect") === "on",
+  );
+  const [glassIntensity, setGlassIntensity] =
+    useState<string>(loadGlassIntensity);
+  const [muteBinding, setMuteBinding] = useState<PttBinding | null>(() =>
+    loadActionBinding("chips:mute-binding"),
+  );
+  const [deafenBinding, setDeafenBinding] = useState<PttBinding | null>(() =>
+    loadActionBinding("chips:deafen-binding"),
+  );
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        !connected ||
+        e.repeat ||
+        optionsDialogOpen ||
+        profileEditorOpen ||
+        document.querySelector("[role=dialog]") ||
+        (e.target instanceof HTMLElement &&
+          e.target.closest("input,textarea,select,[contenteditable=true]"))
+      )
+        return;
+      if (matchesBinding(muteBinding, e)) {
+        e.preventDefault();
+        void handleToggleMic();
+      } else if (matchesBinding(deafenBinding, e)) {
+        e.preventDefault();
+        handleToggleDeafen();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
+
+  const allActionBindings = { ...shortcutBindings, mute: muteBinding, deafen: deafenBinding, ptt: pttBinding };
+  const changeActionBinding = (action: keyof typeof allActionBindings, next: PttBinding | null) => {
+    if (next && Object.entries(allActionBindings).some(([id,b]) => id !== action && sameBinding(b,next))) {
+      alert("Choose a different key: this binding is already assigned to another action."); return;
+    }
+    if (action === "ptt") setPttBinding(next);
+    else if (action === "mute" || action === "deafen") {
+      (action === "mute" ? setMuteBinding : setDeafenBinding)(next);
+      const key = `chips:${action}-binding`;
+      if (next) localStorage.setItem(key, JSON.stringify(next)); else localStorage.removeItem(key);
+    } else {
+      const updated = { ...shortcutBindings, [action]: next };
+      setShortcutBindings(updated); localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(updated));
+    }
+  };
+
+  const syncProfileToken = (description: string) => {
+    const token = encodeStyleToken(profileStyle);
+    if (description.match(/\[s:v1;[^\]]*\]/)?.[0] !== token)
+      socketRef.current?.send(
+        JSON.stringify({
+          type: "setDescription",
+          description: replaceStyleToken(description, token),
+        }),
+      );
+  };
   const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); const own = clients.find(c => c.id === ownClientId); if (connected && own) socketRef.current?.send(JSON.stringify({ type: "setDescription", description: replaceStyleToken(own.description ?? "", encodeStyleToken(next)) })); };
   // "Reduce animations": the in-app switch, on top of the OS preference that the
   // stylesheet already honours. Freezes every Step 3 effect to a static gradient.
@@ -12853,6 +12767,7 @@ function AppInner() {
       data-design-theme={designTheme}
       data-accent={accent}
       data-motion={reduceMotion ? "reduced" : "full"}
+      data-glass-intensity={glassIntensity}
       style={accentStyle}
     >
       {DEMO_MODE && (
@@ -12862,7 +12777,7 @@ function AppInner() {
             WebSpeak3 project
           </a>
           <button className="ts-demo-mobile-toggle" onClick={() => setDemoForceMobile((v) => !v)}>
-            {demoForceMobile ? "🖥 Desktop view" : "📱 Mobile view"}
+            {demoForceMobile ? " Desktop view" : " Mobile view"}
           </button>
         </div>
       )}
@@ -12875,7 +12790,7 @@ function AppInner() {
             aria-label={t("menu.connections")}
             aria-expanded={novaMenuOpen}
           >
-            ☰
+            <UiIcon name="menu" />
           </button>
         )}
         <div
@@ -12902,9 +12817,9 @@ function AppInner() {
                   setConnectionsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🟢</span>
+                <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.connect")}</span>
-                <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+S</span>
+                <span className="ts-menu-item-shortcut">{shortcutBindings.connect?.label ?? ""}</span>
               </button>
               <button
                 className="ts-menu-item"
@@ -12914,9 +12829,9 @@ function AppInner() {
                   setConnectionsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔴</span>
+                <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.disconnectCurrent")}</span>
-                <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+D</span>
+                <span className="ts-menu-item-shortcut">{shortcutBindings.disconnect?.label ?? ""}</span>
               </button>
               <button
                 className="ts-menu-item"
@@ -12926,7 +12841,7 @@ function AppInner() {
                   setConnectionsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">❌</span>
+                <span className="ts-menu-item-icon"><UiIcon name="close" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.disconnectAll")}</span>
               </button>
             </div>
@@ -12943,15 +12858,8 @@ function AppInner() {
           </button>
           {favoritesMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
-              <button className="ts-menu-item" onClick={openAddFavorite}>
-                <span className="ts-menu-item-icon">⭐</span>
-                <span className="ts-menu-item-label">{t("menu.favorites.add")}</span>
-                <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+B</span>
-              </button>
-              <button className="ts-menu-item" onClick={openManageFavorites}>
-                <span className="ts-menu-item-icon">🗂️</span>
-                <span className="ts-menu-item-label">{t("menu.favorites.manage")}</span>
-              </button>
+
+
               {favorites.length > 0 && <div className="ts-menu-separator" />}
               {favorites.map((f) => (
                 <button
@@ -12963,7 +12871,7 @@ function AppInner() {
                     setFavoritesMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">🔖</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="bookmark" /></span>
                   <span className="ts-menu-item-label">{f.bookmarkName}</span>
                 </button>
               ))}
@@ -12981,22 +12889,6 @@ function AppInner() {
           </button>
           {selfMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🎙️</span>
-                <span className="ts-menu-item-label">{t("menu.self.recordingProfile")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🔊</span>
-                <span className="ts-menu-item-label">{t("menu.self.playbackProfile")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">⌨️</span>
-                <span className="ts-menu-item-label">{t("menu.self.hotkeyProfile")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🔔</span>
-                <span className="ts-menu-item-label">{t("menu.self.soundPack")}</span>
-              </button>
               <div className="ts-menu-separator" />
               <button
                 className="ts-menu-item"
@@ -13007,7 +12899,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">💤</span>
+                <span className="ts-menu-item-icon"><UiIcon name="away" /></span>
                 <span className="ts-menu-item-label">{t("menu.self.setAway")}</span>
               </button>
               <button
@@ -13018,7 +12910,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">{micOn ? "🔇" : "🎤"}</span>
+                <span className="ts-menu-item-icon">{micOn ? <UiIcon name="mic-off" /> : <UiIcon name="mic" />}</span>
                 <span className="ts-menu-item-label">
                   {micOn ? t("menu.self.disableMic") : t("menu.self.enableMic")}
                 </span>
@@ -13031,36 +12923,13 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">{outputMuted ? "🔊" : "🔇"}</span>
+                <span className="ts-menu-item-icon">{outputMuted ? <UiIcon name="volume" /> : <UiIcon name="volume-off" />}</span>
                 <span className="ts-menu-item-label">
                   {outputMuted ? t("menu.self.unmuteOutput") : t("menu.self.muteOutput")}
                 </span>
               </button>
               <div className="ts-menu-separator" />
-              <button
-                className="ts-menu-item"
-                disabled={!connected}
-                onClick={() => {
-                  setNicknameDraft(nickname);
-                  setChangeNicknameOpen(true);
-                  setSelfMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">✎</span>
-                <span className="ts-menu-item-label">{t("menu.self.changeNickname")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🗣️</span>
-                <span className="ts-menu-item-label">{t("menu.self.requestTalkPower")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🖼️</span>
-                <span className="ts-menu-item-label">{t("menu.self.setAvatar")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🔤</span>
-                <span className="ts-menu-item-label">{t("menu.self.setPhoneticNickname")}</span>
-              </button>
+
               <div className="ts-menu-separator" />
               <button
                 className="ts-menu-item"
@@ -13070,7 +12939,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">ℹ️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="info" /></span>
                 <span className="ts-menu-item-label">{t("menu.self.connectionInfo")}</span>
               </button>
             </div>
@@ -13094,7 +12963,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🏷️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="group" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.serverGroups")}</span>
               </button>
               <button
@@ -13104,7 +12973,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🎖️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="badge" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.channelGroups")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13115,7 +12984,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔐</span>
+                <span className="ts-menu-item-icon"><UiIcon name="lock" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.serverPermissions")}</span>
               </button>
               <button
@@ -13125,11 +12994,11 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔑</span>
+                <span className="ts-menu-item-icon"><UiIcon name="key" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.channelPermissions")}</span>
               </button>
               <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">📖</span>
+                <span className="ts-menu-item-icon"><UiIcon name="book" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.overview")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13140,7 +13009,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🙋</span>
+                <span className="ts-menu-item-icon"><UiIcon name="hand" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.myRights")}</span>
               </button>
             </div>
@@ -13157,26 +13026,8 @@ function AppInner() {
           </button>
           {extrasMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setIdentitiesOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">🪪</span>
-                <span className="ts-menu-item-label">{t("menu.extras.identities")}</span>
-              </button>
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setContactsOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">📇</span>
-                <span className="ts-menu-item-label">{t("menu.extras.contacts")}</span>
-              </button>
+
+
               <button
                 className="ts-menu-item"
                 onClick={() => {
@@ -13184,7 +13035,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔗</span>
+                <span className="ts-menu-item-icon"><UiIcon name="link" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.collectedUrls")}</span>
               </button>
               <button
@@ -13195,7 +13046,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🧑‍🤝‍🧑</span>
+                <span className="ts-menu-item-icon"><UiIcon name="users" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.inviteFriend")}</span>
               </button>
               <button
@@ -13205,20 +13056,11 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">⇅</span>
+                <span className="ts-menu-item-icon"><UiIcon name="arrow" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.fileTransfers")}</span>
               </button>
               <div className="ts-menu-separator" />
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setWhisperListsOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">🗒️</span>
-                <span className="ts-menu-item-label">{t("menu.extras.whisperLists")}</span>
-              </button>
+
               <button
                 className="ts-menu-item"
                 onClick={() => {
@@ -13226,7 +13068,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🕓</span>
+                <span className="ts-menu-item-icon"><UiIcon name="clock" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.whisperHistory")}</span>
               </button>
               <button
@@ -13236,7 +13078,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📜</span>
+                <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.clientLog")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13247,7 +13089,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🚫</span>
+                <span className="ts-menu-item-icon"><UiIcon name="ban" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.banList")}</span>
               </button>
               <button
@@ -13257,7 +13099,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">⚠️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="warning" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.complaintList")}</span>
               </button>
               <button
@@ -13267,7 +13109,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📧</span>
+                <span className="ts-menu-item-icon"><UiIcon name="mail" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.offlineMessages")}</span>
               </button>
               <button
@@ -13279,7 +13121,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔑</span>
+                <span className="ts-menu-item-icon"><UiIcon name="key" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.serverQueryLogin")}</span>
               </button>
               <button
@@ -13289,7 +13131,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📄</span>
+                <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.serverLog")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13301,11 +13143,11 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔴</span>
+                <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.startRecording")}</span>
               </button>
               <button className="ts-menu-item" disabled>
-                <span className="ts-menu-item-icon">🔴</span>
+                <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.startMultitrackRecording")}</span>
               </button>
               <button
@@ -13316,31 +13158,22 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">⏹️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="stop" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.stopRecording")}</span>
               </button>
               <div className="ts-menu-separator" />
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setOptionsDialogOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">⚙️</span>
-                <span className="ts-menu-item-label">{t("menu.extras.options")}</span>
-              </button>
+
             </div>
           )}
         </div>
-        <button type="button" className="ts-menubar-item ts-plain-button" onClick={() => setProfileEditorOpen(true)}>✨ Profile style</button>
+
         {IS_OWN_HOSTED_INSTANCE && (
           <button
             type="button"
             className="ts-menubar-item ts-plain-button"
             onClick={() => setFeedbackOpen(true)}
           >
-            💬 {t("menu.extras.feedback")}
+            <UiIcon name="chat" /> {t("menu.extras.feedback")}
           </button>
         )}
         <div className="ts-menubar-dropdown" ref={helpMenuRef}>
@@ -13361,7 +13194,7 @@ function AppInner() {
                   setHelpMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">ℹ️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="info" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.about")}</span>
               </button>
               <a
@@ -13369,7 +13202,7 @@ function AppInner() {
                 {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}
                 onClick={() => setHelpMenuOpen(false)}
               >
-                <span className="ts-menu-item-icon">🐙</span>
+                <span className="ts-menu-item-icon"><UiIcon name="code" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.github")}</span>
               </a>
               <a
@@ -13377,7 +13210,7 @@ function AppInner() {
                 {...externalLinkProps("https://github.com/WebSpeak3/webspeak3/releases")}
                 onClick={() => setHelpMenuOpen(false)}
               >
-                <span className="ts-menu-item-icon">📋</span>
+                <span className="ts-menu-item-icon"><UiIcon name="copy" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.changelog")}</span>
               </a>
               <a
@@ -13385,7 +13218,7 @@ function AppInner() {
                 {...externalLinkProps("https://hosted.weblate.org/projects/webspeak3/")}
                 onClick={() => setHelpMenuOpen(false)}
               >
-                <span className="ts-menu-item-icon">🌐</span>
+                <span className="ts-menu-item-icon"><UiIcon name="globe" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.translate")}</span>
               </a>
               {IS_OWN_HOSTED_INSTANCE && (
@@ -13397,7 +13230,7 @@ function AppInner() {
                     setHelpMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">📜</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
                   <span className="ts-menu-item-label">{t("menu.extras.tos")}</span>
                 </button>
               )}
@@ -13441,7 +13274,7 @@ function AppInner() {
               title={isAway ? t("toolbar.backOnline") : t("toolbar.setAway")}
               aria-label={isAway ? t("toolbar.backOnline") : t("toolbar.setAway")}
             >
-              💤
+              <UiIcon name="away" />
             </button>
             <button
               className="ts-icon-caret"
@@ -13455,7 +13288,7 @@ function AppInner() {
               aria-haspopup="menu"
               aria-expanded={awayMenuOpen}
             >
-              ▾
+              <UiIcon name="minus" />
             </button>
             {awayMenuOpen && (
               <div className="ts-menu ts-menu-away" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
@@ -13466,7 +13299,7 @@ function AppInner() {
                     setAwayMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">💤</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="away" /></span>
                   <span className="ts-menu-item-label">{t("away.setGlobal")}</span>
                 </button>
                 <button
@@ -13477,7 +13310,7 @@ function AppInner() {
                     setAwayMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">✎</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="edit" /></span>
                   <span className="ts-menu-item-label">{t("away.setGlobalStatus")}</span>
                 </button>
                 {awayPresets.length > 0 && <div className="ts-menu-separator" />}
@@ -13507,7 +13340,7 @@ function AppInner() {
               aria-haspopup="menu"
               aria-expanded={whisperMenuOpen}
             >
-              🤫
+              <UiIcon name="mic" />
             </button>
             {whisperMenuOpen && (
               <div className="ts-menu ts-menu-away" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
@@ -13528,7 +13361,7 @@ function AppInner() {
                     <div className="ts-context-menu-title">{t("whisper.clients")}</div>
                     {[...whisperClientIds].map((id) => (
                       <button key={id} className="ts-menu-item" onClick={() => toggleWhisperClient(id)}>
-                        <span className="ts-menu-item-icon">✕</span>
+                        <span className="ts-menu-item-icon"><UiIcon name="close" /></span>
                         <span className="ts-menu-item-label">
                           {clients.find((c) => c.id === id)?.name ?? id}
                         </span>
@@ -13554,7 +13387,7 @@ function AppInner() {
             title={micLabel}
             aria-label={micLabel}
           >
-            {micOn && !inputMuted ? "🎤" : "🔇"}
+            {micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}
           </button>
           {pushToTalk ? (
             <button
@@ -13579,22 +13412,9 @@ function AppInner() {
               aria-label={t("toolbar.pushToTalk")}
               aria-pressed={pttPressed}
             >
-              🗣️
+              <UiIcon name="mic" />
             </button>
-          ) : continuous ? null : (
-            <label className="ts-icon-slider" title={t("toolbar.vadSensitivity")}>
-              🎚️
-              <input
-                type="range"
-                min={0.002}
-                max={0.15}
-                step={0.002}
-                value={vadThreshold}
-                onChange={(e) => setVadThreshold(Number(e.target.value))}
-                aria-label={t("toolbar.vadSensitivity")}
-              />
-            </label>
-          )}
+          ) : null}
           <button
             className={`ts-icon-button${publishState === "live" ? " ts-mic-on" : ""}`}
             onClick={handleStreamButton}
@@ -13605,7 +13425,7 @@ function AppInner() {
             title={streamLabel}
             aria-label={streamLabel}
           >
-            {publishState === "live" ? "🛑" : "🖥️"}
+            {publishState === "live" ? <UiIcon name="stop" /> : <UiIcon name="screen" />}
           </button>
           {TAB_AUDIO_SUPPORTED && (
             <button
@@ -13615,7 +13435,7 @@ function AppInner() {
               title={tabAudioOn ? t("tabAudio.stop") : t("tabAudio.start")}
               aria-label={tabAudioOn ? t("tabAudio.stop") : t("tabAudio.start")}
             >
-              🎵
+              <UiIcon name="music" />
             </button>
           )}
           <span className="ts-toolbar-sep" />
@@ -13626,46 +13446,15 @@ function AppInner() {
             title={outputMuted ? t("toolbar.unmuteSound") : t("toolbar.muteSound")}
             aria-label={outputMuted ? t("toolbar.unmuteSound") : t("toolbar.muteSound")}
           >
-            {outputMuted ? "🔇" : "🔊"}
+            {outputMuted ? <UiIcon name="volume-off" /> : <UiIcon name="volume" />}
           </button>
-          {hasNativeOutputPicker() ? (
-            <button className="ts-icon-button" onClick={handlePickOutputDevice} title={t("toolbar.chooseOutputDevice")} aria-label={t("toolbar.chooseOutputDevice")}>
-              🎧
-            </button>
-          ) : (
-            <label className="ts-icon-select">
-              🎧
-              <select
-                value={outputDeviceId}
-                onChange={(e) => handleOutputDeviceChange(e.target.value)}
-                onFocus={refreshOutputDevices}
-                aria-label={t("toolbar.chooseOutputDevice")}
-              >
-                <option value="">{t("playback.systemDefault")}</option>
-                {outputDevices.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label || `Output ${d.deviceId.slice(0, 6)}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           {recording && (
             <button className="ts-icon-button ts-recording-on" onClick={stopRecording} title={t("menu.extras.stopRecording")} aria-label={t("menu.extras.stopRecording")}>
-              🔴
+              <UiIcon name="record" />
             </button>
           )}
           <span className="ts-toolbar-sep" />
-          <button
-            className="ts-icon-button"
-            onClick={() => setTheme((mode) => (mode === "dark" ? "light" : "dark"))}
-            title={t("toolbar.toggleTheme")}
-            aria-label={t("toolbar.toggleTheme")}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
-          <AccentSwitcher accent={accent} onChange={handleAccentChange} />
-          <img src={`${import.meta.env.BASE_URL}chips-mark.png`} alt="" className="ts-app-logo" />
+          <img src={`${import.meta.env.BASE_URL}chips-mark.svg`} alt="" className="ts-app-logo" />
           <span className="ts-app-title" role="heading" aria-level={1}>Chips</span>
         </div>
 
@@ -13707,7 +13496,6 @@ function AppInner() {
           canOpenNewTab={sessionTabs.length > 0 || connected}
           onCancel={novaSplash ? () => {} : () => setConnectDialogOpen(false)}
           nova={designTheme === "nova"}
-          onOpenOptions={() => setOptionsDialogOpen(true)}
         />
       )}
 
@@ -13834,7 +13622,6 @@ function AppInner() {
           onAdd={handleAddIdentity}
           onRename={handleRenameIdentity}
           onNicknameChange={handleIdentityNicknameChange}
-          onPhoneticChange={handleIdentityPhoneticChange}
           onDelete={handleDeleteIdentity}
           onExport={handleExportIdentity}
           onImport={handleImportIdentity}
@@ -14012,59 +13799,229 @@ function AppInner() {
       )}
 
       {profileEditorOpen && <ProfileStyleEditor value={profileStyle} onChange={updateProfile} onClose={() => setProfileEditorOpen(false)} />}
-      {optionsDialogOpen && (
+      {optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && !changeNicknameOpen && !contactsOpen && !streamSettingsOpen && (
         <OptionsDialog
+          hubPanels={{
+            connection: (
+              <>
+                <h3>Connection</h3>
+                <button onClick={openManageFavorites}>Manage server presets</button>
+                <button onClick={()=>setContactsOpen(true)}>Contacts and per-contact whisper policy</button>
+                <button onClick={openAddFavorite}>Save server preset</button>
+                <button
+                  disabled={!connected}
+                  onClick={() => {
+                    setNicknameDraft(nickname);
+                    setChangeNicknameOpen(true);
+                  }}
+                >
+                  Change current nickname
+                </button>
+                <label className="ts-dialog-field">
+                  Server address and port
+                  <input
+                    value={host}
+                    placeholder="wwts.ir:1694"
+                    onChange={(e) => {
+                      setHost(e.target.value);
+                      localStorage.setItem(LAST_HOST_KEY, e.target.value);
+                    }}
+                  />
+                </label>
+                <label className="ts-dialog-field">
+                  Nickname
+                  <input
+                    value={nickname}
+                    onChange={(e) => {
+                      setNickname(e.target.value);
+                      localStorage.setItem(LAST_NICKNAME_KEY, e.target.value);
+                    }}
+                  />
+                </label>
+                <label className="ts-dialog-field">
+                  Identity
+                  <select
+                    value={activeIdentityId ?? ""}
+                    onChange={(e) => setActiveIdentityId(e.target.value)}
+                  >
+                    {identities.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button onClick={() => setIdentitiesOpen(true)}>Manage identities</button>
+                <label className="ts-options-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={autoConnect}
+                    onChange={(e) => {
+                      setAutoConnect(e.target.checked);
+                      localStorage.setItem(
+                        "chips:auto-connect",
+                        e.target.checked ? "on" : "off",
+                      );
+                    }}
+                  />
+                  Auto-connect on launch
+                </label>
+                <p>
+                  Connection changes apply on the next connection. Passwords are entered
+                  in Connect.
+                </p>
+                <button
+                  onClick={() => {
+                    setOptionsDialogOpen(false);
+                    setConnectDialogOpen(true);
+                  }}
+                >
+                  Open Connect
+                </button>
+                <AnwendungPanel
+                  showServerBanner={showServerBanner}
+                  onShowServerBannerChange={(on) => {
+                    setShowServerBanner(on);
+                    localStorage.setItem(SERVER_BANNER_KEY, on ? "on" : "off");
+                  }}
+                  chatImages={chatImages}
+                  onChatImagesChange={(on) => {
+                    setChatImages(on);
+                    localStorage.setItem(CHAT_IMAGES_KEY, on ? "on" : "off");
+                  }}
+                />
+                <SecurityPanel
+                  onOpenIdentities={() => setIdentitiesOpen(true)}
+                  onClearCache={handleClearCache}
+                />
+                <DownloadsPanel />
+                <KontoPanel />
+              </>
+            ),
+            audio: <><fieldset className="ts-options-fieldset"><legend>Per-speaker volume</legend>
+              {gatewayFeatures.has("clientVolume") ? clients.filter(c=>c.id!==ownClientId && c.uid).map(c=><label className="ts-dialog-field" key={c.uid}>{c.name}<input aria-label={`Volume for ${c.name}`} type="range" min="0" max="2" step="0.05" value={clientVolumes[c.uid] ?? 1} onChange={e=>setClientVolumes(prev=>({...prev,[c.uid]:Number(e.target.value)}))}/><span>{Math.round((clientVolumes[c.uid]??1)*100)}%</span><button onClick={()=>setClientVolumes(prev=>{const next={...prev};delete next[c.uid];return next;})}>Reset {c.name}</button></label>) : <p>Available after connecting to a connector exposing per-speaker mixing.</p>}
+              {!clients.length && <p>Connect to edit speaker volumes. Saved volumes follow each client UID.</p>}
+              {Object.keys(clientVolumes).length>0 && <button onClick={()=>setClientVolumes({})}>Reset all saved speaker volumes</button>}
+            </fieldset><fieldset className="ts-options-fieldset"><legend>Broadcast defaults</legend><p>Existing TS6 P2P screen/camera settings. Opening setup does not capture or publish. Go live requires a connection and explicit confirmation.</p><button onClick={()=>setStreamSettingsOpen(true)}>Configure broadcast defaults</button></fieldset></>,
+            hotkeys: <fieldset className="ts-options-fieldset"><legend>Action bindings</legend>
+              {([ ["mute","Mute"], ["deafen","Deafen"], ["connect","Open Connect"], ["disconnect","Disconnect current session"], ["preset","Save server preset"] ] as const).map(([id,label]) => <div className="ts-options-field-row" key={id}><span>{label}</span><PttKeyButton keyboardOnly binding={allActionBindings[id]} onChange={b=>changeActionBinding(id,b)}/><button onClick={()=>changeActionBinding(id,null)}>Clear {label.toLowerCase()}</button></div>)}
+            </fieldset>,
+            sounds: (
+              <p>
+                Desktop notifications are not available in this build; in-app
+                notifications and event sounds are supported.
+              </p>
+            ),
+            design: (
+              <>
+                <h3>Appearance</h3>
+                <DesignPanel
+                  designSelection={designSelection}
+                  onSelectionChange={handleDesignSelectionChange}
+                  customThemes={customThemes}
+                  onSaveCustomTheme={handleSaveCustomTheme}
+                  onDeleteCustomTheme={handleDeleteCustomTheme}
+                  idePixelFont={idePixelFont}
+                  onIdePixelFontChange={(on) => {
+                    setIdePixelFont(on);
+                    localStorage.setItem(IDE_PIXEL_FONT_KEY, on ? "on" : "off");
+                  }}
+                  reduceMotion={reduceMotion}
+                  onReduceMotionChange={handleReduceMotionChange}
+                />
+                {designTheme === "standard" && !activeCustomTheme && (
+                  <label className="ts-options-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={theme === "dark"}
+                    onChange={(e) => {
+                      setTheme(e.target.checked ? "dark" : "light");
+                      localStorage.setItem(
+                        "chips:brightness",
+                        e.target.checked ? "dark" : "light",
+                      );
+                    }}
+                  />
+                  Dark appearance
+                </label>
+                )}
+                <IconPackPanel />
+                <h4>Accent</h4>
+                <AccentSwitcher accent={accent} onChange={handleAccentChange} />
+                {designTheme === "glass" && !activeCustomTheme && (
+                  <label className="ts-dialog-field">
+                  Liquid Glass intensity
+                  <select
+                    value={glassIntensity}
+                    onChange={(e) => {
+                      setGlassIntensity(e.target.value);
+                      localStorage.setItem("chips:glass-intensity", e.target.value);
+                    }}
+                  >
+                    <option value="0">Off</option>
+                    <option value="0.5">Subtle</option>
+                    <option value="1">Full</option>
+                  </select>
+                </label>
+                )}
+                <label>
+                  Name-style default
+                  <select
+                    value={nameStyle.style}
+                    onChange={(e) =>
+                      updateProfile({
+                        ...profileStyle,
+                        name: {
+                          ...nameStyle,
+                          style: e.target.value as NameStyleConfig["style"],
+                        },
+                      })
+                    }
+                  >
+                    {NAME_STYLES.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <ChatPanel />
+                <p>
+                  <strong>Theme files — Step 7 (not implemented).</strong> .chipstheme
+                  import/export will live here.
+                </p>
+              </>
+            ),
+            profile: (
+              <>
+                <h3>Profile</h3>
+                <p>
+                  Customize your name, avatar, banner, status and card using the existing
+                  profile panel.
+                </p>
+                <button onClick={() => setProfileEditorOpen(true)}>
+                  Customize profile
+                </button>
+              </>
+            ),
+          }}
           onOpenWhisperLists={() => setWhisperListsOpen(true)}
-          onOpenIdentities={() => setIdentitiesOpen(true)}
           onOpenFavorites={openManageFavorites}
           // Native's ✔: the chosen pack becomes every favorite's pack (drop their overrides).
           onApplyPackToFavorites={() => saveFavorites(favorites.map(({ soundPack: _, ...f }) => f))}
-          onClearCache={handleClearCache}
           section={optionsSection}
           onSectionChange={setOptionsSection}
           onClose={() => {
             setOptionsDialogOpen(false);
             if (window.location.hash.startsWith("#options/")) window.history.replaceState(null, "", window.location.pathname + window.location.search);
           }}
-          designSelection={designSelection}
-          onDesignSelectionChange={handleDesignSelectionChange}
-          customThemes={customThemes}
-          onSaveCustomTheme={handleSaveCustomTheme}
-          onDeleteCustomTheme={handleDeleteCustomTheme}
-          idePixelFont={idePixelFont}
-          onIdePixelFontChange={(on) => {
-            setIdePixelFont(on);
-            try {
-              localStorage.setItem(IDE_PIXEL_FONT_KEY, on ? "on" : "off");
-            } catch {
-              /* private mode: setting just doesn't persist */
-            }
-          }}
-          reduceMotion={reduceMotion}
-          onReduceMotionChange={handleReduceMotionChange}
-          showServerBanner={showServerBanner}
-          onShowServerBannerChange={(on) => {
-            setShowServerBanner(on);
-            try {
-              localStorage.setItem(SERVER_BANNER_KEY, on ? "on" : "off");
-            } catch {
-              /* private mode: setting just doesn't persist */
-            }
-          }}
-          chatImages={chatImages}
-          onChatImagesChange={(on) => {
-            setChatImages(on);
-            try {
-              localStorage.setItem(CHAT_IMAGES_KEY, on ? "on" : "off");
-            } catch {
-              /* private mode: setting just doesn't persist */
-            }
-          }}
           audio={{
             outputDevices,
             outputDeviceId,
             onOutputDeviceChange: handleOutputDeviceChange,
             onRefreshOutputDevices: refreshOutputDevices,
+            onEnableCapture: () => void handleToggleMic(),
+            onPickOutputDevice: () => { void pickAudioOutputDevice().then(device=>{if(device)void handleOutputDeviceChange(device.deviceId);}).catch(error=>appendLog({kind:"error",text:`Output device error: ${String(error)}`})); },
             playbackVolume,
             onPlaybackVolumeChange: setPlaybackVolume,
             autoVolume,
@@ -14093,7 +14050,7 @@ function AppInner() {
             onTypingAttenuationChange: setTypingAttenuation,
             onPushToTalkChange: setPushToTalk,
             pttBinding,
-            onPttBindingChange: setPttBinding,
+            onPttBindingChange: b => changeActionBinding("ptt",b),
             noiseSuppressionEnabled,
             onToggleNoiseSuppression: handleToggleNoiseSuppression,
             echoCancellationEnabled,
@@ -14109,9 +14066,9 @@ function AppInner() {
 
       {connectError && (
         <div className="ts-connect-error">
-          <span>⚠️ {connectError}</span>
+          <span><UiIcon name="warning" /> {connectError}</span>
           <button onClick={() => setConnectError(null)} title={t("connectError.dismiss")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
       )}
@@ -14119,7 +14076,7 @@ function AppInner() {
       {changeNicknameOpen && (
         <div className="ts-poke-compose-backdrop" {...nicknameBackdrop}>
           <div className="ts-poke-compose" onClick={(e) => e.stopPropagation()}>
-            <span>✎ {t("menu.self.changeNickname")}</span>
+            <span><UiIcon name="edit" /> {t("menu.self.changeNickname")}</span>
             <input
               autoFocus
               value={nicknameDraft}
@@ -14149,7 +14106,7 @@ function AppInner() {
       {serverQueryLoginOpen && (
         <div className="ts-poke-compose-backdrop" {...serverQueryLoginBackdrop}>
           <div className="ts-poke-compose ts-serverquery-login-compose" onClick={(e) => e.stopPropagation()}>
-            <span>🔑 {t("menu.extras.serverQueryLogin")}</span>
+            <span><UiIcon name="key" /> {t("menu.extras.serverQueryLogin")}</span>
             <input
               autoFocus
               placeholder={t("serverQueryLogin.username")}
@@ -14184,7 +14141,7 @@ function AppInner() {
         <div className="ts-poke-compose-backdrop" {...pokeBackdrop}>
           <div className="ts-poke-compose" onClick={(e) => e.stopPropagation()}>
             <span>
-              👉 {t("poke.title")} <strong>{pokeTarget.name}</strong>
+              <UiIcon name="hand" /> {t("poke.title")} <strong>{pokeTarget.name}</strong>
             </span>
             <input
               autoFocus
@@ -14206,7 +14163,7 @@ function AppInner() {
         <div className="ts-poke-compose-backdrop" {...kickBackdrop}>
           <div className="ts-poke-compose" onClick={(e) => e.stopPropagation()}>
             <span>
-              👢 {t("kick.title")} <strong>{kickTarget.name}</strong>
+              <UiIcon name="logout" /> {t("kick.title")} <strong>{kickTarget.name}</strong>
             </span>
             <input
               autoFocus
@@ -14228,7 +14185,7 @@ function AppInner() {
         <div className="ts-poke-compose-backdrop" {...banBackdrop}>
           <div className="ts-poke-compose ts-ban-compose" onClick={(e) => e.stopPropagation()}>
             <span>
-              🚫 {t("ban.title")} <strong>{banTarget.name}</strong>
+              <UiIcon name="ban" /> {t("ban.title")} <strong>{banTarget.name}</strong>
             </span>
             <label className="ts-ban-duration-field">
               {t("ban.duration")}
@@ -14257,16 +14214,17 @@ function AppInner() {
       {pokes.map((poke) => (
         <div key={poke.id} className="ts-poke-notice">
           <span>
-            👉 <strong>{poke.from}</strong> {t("poke.pokedYou")}{poke.message ? `: ${poke.message}` : ""}
+            <UiIcon name="hand" /> <strong>{poke.from}</strong> {t("poke.pokedYou")}{poke.message ? `: ${poke.message}` : ""}
           </span>
           <button onClick={() => setPokes((prev) => prev.filter((p) => p.id !== poke.id))} title={t("poke.dismiss")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
       ))}
 
       {streamSettingsOpen && (
         <StreamSettingsDialog
+          canStart={connected && ownClientId !== null && !DEMO_MODE}
           ownName={ownClient?.name ?? "Chips"}
           onStart={handleStartPublishing}
           onCancel={() => setStreamSettingsOpen(false)}
@@ -14278,7 +14236,7 @@ function AppInner() {
         <div className="ts-stream-panel ts-stream-panel-publish">
           <div className="ts-stream-panel-header">
             <span className="ts-stream-panel-title">
-              🖥️ {t("publish.title")} <AlphaBadge />
+              <UiIcon name="screen" /> {t("publish.title")} <AlphaBadge />
             </span>
             <span className="ts-stream-panel-state">
               {publishState === "live"
@@ -14290,7 +14248,7 @@ function AppInner() {
               onClick={handleStopPublishing}
               title={t("publish.stop")}
             >
-              ✕
+              <UiIcon name="close" />
             </button>
           </div>
           {/* muted: this is our own capture playing back locally */}
@@ -14326,7 +14284,7 @@ function AppInner() {
         <div className="ts-stream-panel">
           <div className="ts-stream-panel-header">
             <span className="ts-stream-panel-title">
-              📺 {watchedStream.name || t("stream.untitled")} <AlphaBadge />
+              <UiIcon name="screen" /> {watchedStream.name || t("stream.untitled")} <AlphaBadge />
             </span>
             <span className="ts-stream-panel-state">
               {streamState === "connected" ? t("stream.live") : t(`stream.state.${streamState}`)}
@@ -14336,7 +14294,7 @@ function AppInner() {
               onClick={handleStopWatchingStream}
               title={t("stream.stop")}
             >
-              ✕
+              <UiIcon name="close" />
             </button>
           </div>
           {/* muted so autoplay is never blocked; the user unmutes via the controls */}
@@ -14362,7 +14320,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">💬</span>
+            <span className="ts-menu-item-icon"><UiIcon name="chat" /></span>
             <span className="ts-menu-item-label">{t("clientContext.privateChat")}</span>
           </button>
           <button
@@ -14373,45 +14331,11 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">👉</span>
+            <span className="ts-menu-item-icon"><UiIcon name="hand" /></span>
             <span className="ts-menu-item-label">{t("clientContext.poke")}</span>
           </button>
-          {!clientContextMenu.isSelf &&
-            gatewayFeatures.has("clientVolume") &&
-            (() => {
-              const uid = clients.find((c) => c.id === clientContextMenu.clientId)?.uid;
-              if (!uid) return null;
-              const percent = Math.round((clientVolumes[uid] ?? 1) * 100);
-              return (
-                <label className="ts-menu-item ts-menu-volume" title={t("clientContext.volumeHint")}>
-                  <span className="ts-menu-item-icon">{percent === 0 ? "🔇" : "🔉"}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={200}
-                    step={5}
-                    value={percent}
-                    aria-label={t("clientContext.volume")}
-                    onChange={(e) => {
-                      const volume = Number(e.target.value) / 100;
-                      setClientVolumes((prev) => {
-                        const next = { ...prev };
-                        if (volume === 1) delete next[uid];
-                        else next[uid] = volume;
-                        return next;
-                      });
-                    }}
-                    onDoubleClick={() =>
-                      setClientVolumes((prev) => {
-                        const { [uid]: _, ...rest } = prev;
-                        return rest;
-                      })
-                    }
-                  />
-                  <span className="ts-menu-volume-value">{percent}%</span>
-                </label>
-              );
-            })()}
+          {!clientContextMenu.isSelf && gatewayFeatures.has("clientVolume") && <button className="ts-menu-item" onClick={()=>{setClientContextMenu(null);setOptionsSection("audio");setOptionsDialogOpen(true);}}><UiIcon name="volume"/> Open speaker volume settings</button>}
+
           {!clientContextMenu.isSelf && streamInfos[clientContextMenu.clientId] && (
             <button
               className="ts-menu-item"
@@ -14420,7 +14344,7 @@ function AppInner() {
                 setClientContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">📺</span>
+              <span className="ts-menu-item-icon"><UiIcon name="screen" /></span>
               <span className="ts-menu-item-label">{t("clientContext.watchStream")}</span>
             </button>
           )}
@@ -14432,7 +14356,7 @@ function AppInner() {
                 setClientContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">🚚</span>
+              <span className="ts-menu-item-icon"><UiIcon name="arrow" /></span>
               <span className="ts-menu-item-label">{t("clientContext.moveTo")}</span>
             </button>
           )}
@@ -14443,7 +14367,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📋</span>
+            <span className="ts-menu-item-icon"><UiIcon name="copy" /></span>
             <span className="ts-menu-item-label">{t("clientContext.copyName")}</span>
           </button>
           <button
@@ -14453,7 +14377,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🔌</span>
+            <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
             <span className="ts-menu-item-label">{t("clientContext.connectionInfo")}</span>
           </button>
           {!clientContextMenu.isSelf && (
@@ -14464,7 +14388,7 @@ function AppInner() {
                 setClientContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">🤫</span>
+              <span className="ts-menu-item-icon"><UiIcon name="mic" /></span>
               <span className="ts-menu-item-label">
                 {whisperClientIds.has(clientContextMenu.clientId)
                   ? t("clientContext.removeWhisperTarget")
@@ -14480,7 +14404,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🏷️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="group" /></span>
             <span className="ts-menu-item-label">{t("clientContext.assignChannelGroup")}</span>
           </button>
           <button
@@ -14490,7 +14414,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🎖️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="badge" /></span>
             <span className="ts-menu-item-label">{t("clientContext.assignServerGroup")}</span>
           </button>
           {!clientContextMenu.isSelf && (
@@ -14508,7 +14432,7 @@ function AppInner() {
                   setClientContextMenu(null);
                 }}
               >
-                <span className="ts-menu-item-icon">🚪</span>
+                <span className="ts-menu-item-icon"><UiIcon name="logout" /></span>
                 <span className="ts-menu-item-label">{t("clientContext.kickChannel")}</span>
               </button>
               <button
@@ -14523,7 +14447,7 @@ function AppInner() {
                   setClientContextMenu(null);
                 }}
               >
-                <span className="ts-menu-item-icon">👢</span>
+                <span className="ts-menu-item-icon"><UiIcon name="logout" /></span>
                 <span className="ts-menu-item-label">{t("clientContext.kick")}</span>
               </button>
               <button
@@ -14535,7 +14459,7 @@ function AppInner() {
                   setClientContextMenu(null);
                 }}
               >
-                <span className="ts-menu-item-icon">🚫</span>
+                <span className="ts-menu-item-icon"><UiIcon name="ban" /></span>
                 <span className="ts-menu-item-label">{t("clientContext.ban")}</span>
               </button>
             </>
@@ -14558,7 +14482,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🔌</span>
+            <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
             <span className="ts-menu-item-label">{t("serverContext.connectionInfo")}</span>
           </button>
           <button
@@ -14568,7 +14492,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">✏️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="edit" /></span>
             <span className="ts-menu-item-label">{t("serverEdit.title")}</span>
           </button>
           <button
@@ -14578,7 +14502,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📋</span>
+            <span className="ts-menu-item-icon"><UiIcon name="copy" /></span>
             <span className="ts-menu-item-label">{t("serverContext.copyAddress")}</span>
           </button>
           <button
@@ -14588,7 +14512,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">⭐</span>
+            <span className="ts-menu-item-icon"><UiIcon name="star" /></span>
             <span className="ts-menu-item-label">{t("serverContext.addFavorite")}</span>
           </button>
           <div className="ts-menu-separator" />
@@ -14599,7 +14523,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🖼️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="image" /></span>
             <span className="ts-menu-item-label">{t("serverContext.icons")}</span>
           </button>
           <button
@@ -14609,7 +14533,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📜</span>
+            <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
             <span className="ts-menu-item-label">{t("menu.extras.serverLog")}</span>
           </button>
           <button
@@ -14619,7 +14543,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🚫</span>
+            <span className="ts-menu-item-icon"><UiIcon name="ban" /></span>
             <span className="ts-menu-item-label">{t("menu.extras.banList")}</span>
           </button>
           <button
@@ -14629,7 +14553,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">⚠️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="warning" /></span>
             <span className="ts-menu-item-label">{t("menu.extras.complaintList")}</span>
           </button>
           <div className="ts-menu-separator" />
@@ -14640,7 +14564,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">❌</span>
+            <span className="ts-menu-item-icon"><UiIcon name="close" /></span>
             <span className="ts-menu-item-label">{t("serverContext.disconnect")}</span>
           </button>
         </div>
@@ -14667,7 +14591,7 @@ function AppInner() {
                 setChannelContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">➡️</span>
+              <span className="ts-menu-item-icon"><UiIcon name="arrow" /></span>
               <span className="ts-menu-item-label">{t("channelContext.join")}</span>
             </button>
           )}
@@ -14678,7 +14602,7 @@ function AppInner() {
               setChannelContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📁</span>
+            <span className="ts-menu-item-icon"><UiIcon name="folder" /></span>
             <span className="ts-menu-item-label">{t("channelContext.files")}</span>
           </button>
         </div>
@@ -14893,7 +14817,7 @@ function AppInner() {
                     handleClosePrivateChat(thread.partnerId);
                   }}
                 >
-                  ×
+                  <UiIcon name="close" />
                 </span>
               </button>
             ))}
@@ -14942,6 +14866,13 @@ function AppInner() {
             </div>
           );
         })}
+      </div>
+      <div className="chips-self-bar" data-lg>
+        <span className="chips-self-avatar">{profileStyle.avatarImage ? <img src={profileStyle.avatarImage} alt="Your avatar"/> : ownClient ? <AvatarTile client={ownClient} images={serverIconImages} className="ts-client-avatar" isSelf/> : (nickname || "?").slice(0,1).toUpperCase()}</span>
+        <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
+        <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}</button>
+        <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}><UiIcon name="headphones" /></button>
+        <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings"><UiIcon name="settings" /></button>
       </div>
       <NewsTicker />
       {iconPackStyle && <style>{iconPackStyle}</style>}
