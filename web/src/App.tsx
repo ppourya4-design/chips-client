@@ -10337,6 +10337,20 @@ function AppInner() {
           // Audio only for the active session tab.
           if (!outputMutedRef.current) audioPlayerRef.current?.playFrame(data.pcm);
           break;
+        case "clientDescriptionChanged": {
+          // A description change is a profile-style change: patch the client in
+          // place so the tree plate, the avatar ring and an already-open profile
+          // card update without a reconnect. The snapshot ref is kept in step so
+          // later join/leave diffing still compares against current data.
+          const clientId = Number(data.clientId);
+          if (!Number.isFinite(clientId)) break;
+          const description = String(data.description ?? "");
+          const patch = (list: ClientInfo[]) =>
+            list.map((c) => (c.id === clientId ? { ...c, description } : c));
+          setClients(patch);
+          if (previousClientsRef.current) previousClientsRef.current = patch(previousClientsRef.current);
+          break;
+        }
         case "talkers": {
           const next = new Set<number>(data.clients);
           const prev = talkersRef.current;

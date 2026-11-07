@@ -82,3 +82,46 @@ test("connector exit propagates and closes the desktop socket", async () => {
   assert.equal(events.at(-1).type, "error");
   assert.equal(socket.readyState, WebSocket.CLOSED);
 });
+
+test("profile descriptions flow both ways over the desktop bridge", async () => {
+  // Step 5: the shipped app writes its [s:v1;…] style token into its own client
+  // description and applies other clients' descriptions when the sidecar
+  // reports a change - without reconnecting.
+  const lines: string[] = [];
+  let received: ((line: string) => void) | undefined;
+  const spawn: SpawnConnector = async (_options, onLine) => {
+    received = onLine;
+    return { write: async (line) => { await tick(); lines.push(line); }, stop: async () => {} };
+  };
+  const socket = new DesktopSocket(spawn);
+  const events: any[] = [];
+  socket.onmessage = (ev) => events.push(JSON.parse(ev.data));
+  await tick();
+  socket.send(JSON.stringify({ type: "connect", host: "wwts.ir:1694", nickname: "Ali" }));
+  await tick();
+  received!(JSON.stringify({
+    type: "channels",
+    channels: [],
+    clients: [{
+      id: 4, channel: 1, name: "Ali", input_muted: false, output_muted: false,
+      input_hardware_enabled: true, away: false, away_message: "", is_channel_commander: false,
+      country: "", uid: "uid-4", database_id: 4, channel_group: 6, server_groups: [],
+      has_talk_power: false, description: "[s:v1;fx=prism]",
+    }],
+    own_client_id: 4,
+  }));
+  const snapshot = events.find((event) => event.type === "channels");
+  assert.equal(snapshot.clients[0].description, "[s:v1;fx=prism]");
+
+  socket.send(JSON.stringify({ type: "setDescription", description: "[s:v1;fx=shimmer]" }));
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.deepEqual(lines, [`setdescription {"description":"[s:v1;fx=shimmer]"}\n`]);
+
+  received!(JSON.stringify({ type: "clientDescriptionChanged", client_id: 7, description: "[s:v1;fx=solid]" }));
+  assert.deepEqual(events.at(-1), {
+    type: "clientDescriptionChanged",
+    clientId: 7,
+    description: "[s:v1;fx=solid]",
+  });
+  socket.close();
+});

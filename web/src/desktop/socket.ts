@@ -183,6 +183,10 @@ export class DesktopSocket {
         await connection?.setNickname(msg.nickname);
         break;
       }
+      case "setDescription": {
+        await connection?.setDescription(String(msg.description ?? ""));
+        break;
+      }
       case "setWhisperPolicy": {
         connection?.setWhisperPolicy(msg.block === true, Array.isArray(msg.exceptions) ? msg.exceptions : []);
         break;

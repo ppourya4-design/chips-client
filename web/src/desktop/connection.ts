@@ -69,6 +69,8 @@ export interface ClientInfo {
   isStreaming: boolean;
   /** MD5 of the avatar (`client_flag_avatar`), empty without one. */
   avatarHash: string;
+  /** TeamSpeak client description; carries the `[s:v1;…]` profile style token. */
+  description: string;
 }
 
 export interface GroupEntry {
@@ -161,6 +163,7 @@ export type Ts3ConnectionEvent =
   | { type: "poke"; from: string; message: string }
   | { type: "audioOut"; pcm: string }
   | { type: "talkers"; clients: number[] }
+  | { type: "clientDescriptionChanged"; clientId: number; description: string }
   | { type: "whisperReceived"; clientId: number }
   | { type: "disconnected"; reason: string }
   | { type: "reconnecting"; reason: string }
@@ -301,6 +304,8 @@ export class Ts3Connection {
           is_query?: boolean;
           is_streaming?: boolean;
           avatar_hash?: string;
+          /** Added by the Step 4 connector change; absent on older sidecars. */
+          description?: string;
         }
 
         interface RawChannelInfo {
@@ -341,6 +346,7 @@ export class Ts3Connection {
           | { type: "poke"; from: string; message: string }
           | { type: "audioOut"; pcm: string }
           | { type: "talkers"; clients: number[] }
+          | { type: "clientDescriptionChanged"; client_id: number; description: string }
           | { type: "whisperReceived"; clientId: number }
           | { type: "disconnected"; reason: string }
           | { type: "reconnecting"; reason: string }
@@ -480,6 +486,7 @@ export class Ts3Connection {
               isQuery: Boolean(c.is_query),
               isStreaming: Boolean(c.is_streaming),
               avatarHash: c.avatar_hash ?? "",
+              description: c.description ?? "",
             })),
             ownClientId: event.own_client_id ?? 0,
             serverMaxClients: event.server_max_clients ?? 0,
@@ -493,6 +500,14 @@ export class Ts3Connection {
             partnerName: event.partner_name,
             fromSelf: event.from_self,
             message: event.message,
+          });
+        } else if (event.type === "clientDescriptionChanged") {
+          // Live profile-style sync: the sidecar reports the bookkeeping
+          // description change for any client, including other people's.
+          this.emit({
+            type: "clientDescriptionChanged",
+            clientId: event.client_id,
+            description: event.description,
           });
         } else if (event.type === "clientConnectionInfo") {
           this.emit({
@@ -922,6 +937,13 @@ export class Ts3Connection {
   async setNickname(nickname: string): Promise<void> {
     const sanitized = nickname.replace(/[\r\n]+/g, " ").trim();
     if (sanitized) this.writeLine(`nickname ${sanitized}`);
+  }
+
+  /** Own client description; the `[s:v1;…]` profile style token rides inside it.
+   *  The sidecar turns this into the existing `clientedit` protocol command. */
+  async setDescription(description: string): Promise<void> {
+    if (typeof description !== "string") return;
+    this.writeLine(`setdescription ${JSON.stringify({ description })}`);
   }
 
   /** Incoming whispers: allowed or blocked by default; `exceptions` (client ids) get the opposite. */

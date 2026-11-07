@@ -36,7 +36,7 @@ jobs:
         run: |
           npm ci --prefix gateway
           npm ci --prefix web
-          & ./gateway/node_modules/.bin/tsx.cmd --test web/tests/desktop-bridge.test.ts
+          & ./gateway/node_modules/.bin/tsx.cmd --test web/tests/desktop-bridge.test.ts web/tests/motion-policy.test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build connector
         working-directory: connector
