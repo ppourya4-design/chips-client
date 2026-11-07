@@ -1222,7 +1222,7 @@ async fn run(args: Args) -> Result<()> {
 									let own_id = con.get_state()?.own_client.0;
 									let mut packet = OutCommand::new(Direction::C2S, Flags::empty(), PacketType::Command, "clientedit");
 									packet.write_arg("clid", &own_id);
-									packet.write_arg("client_description", description);
+									packet.write_arg("client_description", &description);
 									match packet.send_with_result(&mut con) {
 										Ok(handle) => { pending_messages.insert(handle, "Set client description".into()); }
 										Err(e) => emit(&Event::Error { message: e.to_string() }),
