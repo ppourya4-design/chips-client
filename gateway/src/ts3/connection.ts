@@ -61,6 +61,7 @@ export interface ClientInfo {
   isStreaming: boolean;
   /** MD5 of the avatar (`client_flag_avatar`), empty without one. */
   avatarHash: string;
+  description: string;
 }
 
 export interface GroupEntry {
@@ -152,6 +153,7 @@ export type Ts3ConnectionEvent =
   | { type: "privateMessage"; partnerId: number; partnerName: string; fromSelf: boolean; message: string }
   | { type: "poke"; from: string; message: string }
   | { type: "audioOut"; pcm: string }
+  | { type: "clientDescriptionChanged"; clientId: number; description: string }
   | { type: "talkers"; clients: number[] }
   | { type: "whisperReceived"; clientId: number }
   | { type: "disconnected"; reason: string }
@@ -324,6 +326,7 @@ export class Ts3Connection {
           is_query?: boolean;
           is_streaming?: boolean;
           avatar_hash?: string;
+          description?: string;
         }
 
         interface RawChannelInfo {
@@ -363,6 +366,7 @@ export class Ts3Connection {
           | { type: "privateMessage"; partner_id: number; partner_name: string; from_self: boolean; message: string }
           | { type: "poke"; from: string; message: string }
           | { type: "audioOut"; pcm: string }
+          | { type: "clientDescriptionChanged"; client_id: number; description: string }
           | { type: "talkers"; clients: number[] }
           | { type: "whisperReceived"; clientId: number }
           | { type: "disconnected"; reason: string }
@@ -471,6 +475,8 @@ export class Ts3Connection {
             serverBannerUrl: event.server_banner_url,
             identity: event.identity,
           });
+        } else if (event.type === "clientDescriptionChanged") {
+          this.emit({ type: "clientDescriptionChanged", clientId: event.client_id, description: event.description });
         } else if (event.type === "channels") {
           this.emit({
             type: "channels",
@@ -503,6 +509,7 @@ export class Ts3Connection {
               isQuery: Boolean(c.is_query),
               isStreaming: Boolean(c.is_streaming),
               avatarHash: c.avatar_hash ?? "",
+              description: c.description ?? "",
             })),
             ownClientId: event.own_client_id ?? 0,
             serverMaxClients: event.server_max_clients ?? 0,
@@ -954,6 +961,10 @@ export class Ts3Connection {
   /** Playback volume for one speaker, mixed in the connector (1 = unchanged). */
   setClientVolume(clientId: number, volume: number): void {
     if (Number.isInteger(clientId) && Number.isFinite(volume)) this.writeLine(`clientvolume ${clientId} ${volume}`);
+  }
+
+  async setDescription(description: string): Promise<void> {
+    this.writeLine(`setdescription ${JSON.stringify({ description })}`);
   }
 
   async setNickname(nickname: string): Promise<void> {

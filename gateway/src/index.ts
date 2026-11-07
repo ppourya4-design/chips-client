@@ -886,6 +886,10 @@ wss.on("connection", (socket: WebSocket, req: IncomingMessage) => {
         connection?.setClientVolume(Number(msg.clientId), Number(msg.volume));
         break;
       }
+      case "setDescription": {
+        await connection?.setDescription(String(msg.description ?? ""));
+        break;
+      }
       case "setNickname": {
         await connection?.setNickname(msg.nickname);
         break;

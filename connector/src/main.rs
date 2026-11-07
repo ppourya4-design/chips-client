@@ -151,6 +151,8 @@ struct ClientInfo {
 	/// `client_flag_avatar`: MD5 of the client's avatar, empty without one. The
 	/// file itself is `/avatar_<uid>` in channel 0, fetched by the browser.
 	avatar_hash: String,
+	/// Existing TeamSpeak client description; exposed to the UI for profile tokens.
+	description: String,
 }
 
 /// Payload for the "streamsetup " stdin command - the `setupstream` args, which
@@ -285,6 +287,8 @@ enum Event {
 		/// on a future connection to keep the same client UID.
 		identity: String,
 	},
+	#[serde(rename = "clientDescriptionChanged")]
+	ClientDescriptionChanged { client_id: u16, description: String },
 	#[serde(rename = "channels")]
 	Channels {
 		channels: Vec<ChannelInfo>,
@@ -769,6 +773,7 @@ fn snapshot(con: &data::Connection) -> Event {
 				is_query: matches!(c.client_type, ClientType::Query { .. }),
 				is_streaming: c.is_streaming.unwrap_or(false),
 				avatar_hash: c.avatar_hash.clone(),
+				description: c.description.clone(),
 			}
 		})
 		.collect::<Vec<_>>();
@@ -1210,6 +1215,22 @@ async fn run(args: Args) -> Result<()> {
 						con.events().for_each(|_| future::ready(())).await;
 						emit(&Event::Disconnected { reason: "client requested".into() });
 						break;
+					} else if let Some(rest) = l.strip_prefix("setdescription ") {
+						match serde_json::from_str::<serde_json::Value>(rest) {
+							Ok(payload) => {
+								if let Some(description) = payload.get("description").and_then(|v| v.as_str()) {
+									let own_id = con.get_state()?.own_client.0;
+									let mut packet = OutCommand::new(Direction::C2S, Flags::empty(), PacketType::Command, "clientedit");
+									packet.write_arg("clid", &own_id);
+									packet.write_arg("client_description", description);
+									match packet.send_with_result(&mut con) {
+										Ok(handle) => { pending_messages.insert(handle, "Set client description".into()); }
+										Err(e) => emit(&Event::Error { message: e.to_string() }),
+									}
+								} else { emit(&Event::Error { message: "Invalid setdescription payload".into() }); }
+							}
+							Err(e) => emit(&Event::Error { message: format!("Invalid setdescription payload: {e}") }),
+						}
 					} else if let Some(rest) = l.strip_prefix("switch ") {
 						// "switch <id>" or "switch <id> <base64-encoded password>" - the
 						// password travels base64-encoded since this is a line-based
@@ -2588,6 +2609,11 @@ async fn run(args: Args) -> Result<()> {
 					}
 					let own_id = con.get_state()?.own_client;
 					for event in &events {
+						if let BookEvent::PropertyChanged { id: PropertyId::ClientDescription(client_id), .. } = event {
+							if let Some(client) = con.get_state()?.clients.get(client_id) {
+								emit(&Event::ClientDescriptionChanged { client_id: client_id.0, description: client.description.clone() });
+							}
+						}
 						if let BookEvent::Message { target, invoker, message } = event {
 							match target {
 								MessageTarget::Server => {
