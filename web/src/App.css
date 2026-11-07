@@ -5018,6 +5018,21 @@ input.ts-identities-uid {
 
 .chips-self-avatar :is(img, .ts-client-avatar) { width:32px; height:32px; border-radius:50%; object-fit:cover; }
 
+/* Step A: nameplates — the user's banner (or TS avatar) behind tree rows and
+   the self-bar, kept gentle: low opacity under a dark veil, no glow. The
+   plate layer never takes pointer events; row content sits above it. */
+.chips-nameplate { position:absolute; inset:0; overflow:hidden; border-radius:inherit; pointer-events:none; }
+.chips-nameplate img { display:block; width:100%; height:100%; object-fit:cover; opacity:.32; }
+.chips-nameplate::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(5,5,10,.5), rgba(5,5,10,.12) 55%, rgba(5,5,10,.4)); }
+.ts-client-row { position:relative; overflow:hidden; }
+.ts-client-row > :not(.chips-nameplate) { position:relative; z-index:1; }
+.chips-self-bar { position:relative; overflow:hidden; }
+.chips-self-bar > :not(.chips-nameplate) { position:relative; z-index:1; }
+
+/* Step A: inline chat photo + upload status in the composer. */
+.chips-chat-image { display:block; max-width:min(420px, 100%); max-height:300px; border-radius:12px; object-fit:contain; }
+.chips-chat-upload-status { align-self:center; font-size:.85em; color:var(--text-muted); white-space:nowrap; }
+
 .chips-ui-icon { display:inline-block; width:1.1em; height:1.1em; flex-shrink:0; vertical-align:-0.15em; pointer-events:none; }
 
 /* Step 7: .chipstheme list in Settings -> Appearance. Plain rows, no new

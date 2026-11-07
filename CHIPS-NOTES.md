@@ -922,3 +922,69 @@ real Windows desktop.
 
 This is the last step of the current pipeline; no image-chat or screen-share
 work was started, and the PR is not merged.
+
+## Step A — media phase: app icon, chat images, synced banner, nameplates
+
+Implemented directly by the operator (not Arena) on branch `claude/step-a-media`.
+
+### What landed
+
+- **App icon.** The locked calligraphic CH icon (owner's pick, 2026-11-07)
+  replaces the upstream icon everywhere: `web/src-tauri/icon.ico` (16–256),
+  `web/src-tauri/icons/{32x32,128x128,128x128@2x,icon}.png`, and the web
+  favicons/PWA icons in `web/public/`. All renders derive from the framed
+  1024 master kept in the project files.
+- **Media module** (`web/src/media.ts`). Client for the image host at
+  `https://chips.poyzo.ir`: `POST /upload` (multipart field `file`, header
+  `X-Upload-Token`), public `GET /i/<id>`. Token resolution: the user's
+  **Settings → Connection → Media token** (`chips:media-token`) wins over the
+  build-time `__CHIPS_UPLOAD_TOKEN__` (vite define from the
+  `CHIPS_UPLOAD_TOKEN` env/secret; the Windows workflow passes the secret to
+  the installer build, absent = empty). No token → upload UI hides itself,
+  viewing unaffected. Ids are strictly validated
+  (`^[0-9a-f]{32}\.(png|jpe?g|webp|gif)$`).
+- **CSP fix (load-bearing).** The Tauri CSP previously allowed only
+  `'self' data: blob:` images and no external connects — hosted images could
+  never have loaded or uploaded in the desktop shell. `chips.poyzo.ir` is now
+  allow-listed for `img-src`, `media-src` and `connect-src` only.
+- **Chat images.** Composer gains an image button (vector `ui-image` icon)
+  and paste-an-image support, both shown only when uploads are enabled.
+  Upload → the returned URL is sent as the message (BBCode-wrapped like any
+  link, so native clients get a clickable link). Rendering: a message whose
+  whole text is a Chips `/i/` URL (bare or `[url]`-wrapped) renders inline
+  via `StillImg` (the tree's avatar-animation option freezes GIFs). This
+  first-party host deliberately bypasses the generic remote-image toggle,
+  which continues to govern foreign `[img]` hosts exactly as before.
+- **Synced banner.** Token grammar gains an optional, backward-compatible
+  `bi=<media-id>` field (legacy tokens parse unchanged; malformed ids are
+  dropped in `normalizeProfileStyle`). The profile editor uploads a picked
+  banner when a token exists (falling back to the old local data-URL when
+  not) and clears both fields on Clear. Profile-card banner priority:
+  custom banner id → own local banner image → the client's TeamSpeak avatar
+  as backdrop → banner gradient.
+- **Nameplates.** Tree rows and the self-bar render a `.chips-nameplate`
+  layer (custom banner, else TS avatar) at 32% opacity under a dark gradient
+  veil — no glow, pointer-events off, content stacked above. GIF plates
+  animate via `StillImg` unless avatar animation is off.
+
+### Tests, build and weight
+
+- **84/84 tests pass** (77 previous + 7 new in `web/tests/media.test.ts`:
+  id validation, message-URL detection incl. BBCode wrap and in-sentence
+  rejection, `bi=` round-trip, legacy-token parse, malformed-id drops,
+  token replacement preserving description text). The new file is registered
+  in the Windows workflow's test command.
+- Production `tsc -b && vite build` passes locally; `oxlint` 0 errors /
+  9 warnings (no new warnings; baseline was 11).
+
+### Honest limits
+
+- Nothing here ran on Windows or in WebView2: upload round-trip against the
+  live endpoint from the built app, inline rendering inside the desktop
+  shell, and the two-PC banner/nameplate visibility all need the owner's
+  real-PC pass. The endpoint itself was verified live end-to-end (upload →
+  fetch → relay) when it was deployed.
+- The `CHIPS_UPLOAD_TOKEN` GitHub secret does not exist yet; until the owner
+  adds it, release builds ship without a build-time token and uploads work
+  via the Settings token.
+- Screen share (Step B) is not in this step.
