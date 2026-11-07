@@ -2296,10 +2296,6 @@ function ConnectDialog({
         {expanded && (
             <div className="ts-dialog-grid">
               <label className="ts-dialog-field">
-                {t("connect.phoneticNickname")}
-                <input disabled title={t("clientContext.notSupported")} />
-              </label>
-              <label className="ts-dialog-field">
                 {t("connect.identity")}
                 <select value={activeIdentityId ?? ""} onChange={(e) => onActiveIdentityChange(e.target.value)}>
                   {identities.map((identity) => (
@@ -2314,24 +2310,12 @@ function ConnectDialog({
                 <input value={defaultChannel} onChange={(e) => onDefaultChannelChange(e.target.value)} />
               </label>
               <label className="ts-dialog-field">
-                {t("connect.recordingProfile")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
-                </select>
-              </label>
-              <label className="ts-dialog-field">
                 {t("connect.channelPassword")}
                 <input
                   type="password"
                   value={channelPassword}
                   onChange={(e) => onChannelPasswordChange(e.target.value)}
                 />
-              </label>
-              <label className="ts-dialog-field">
-                {t("connect.playbackProfile")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
-                </select>
               </label>
               <label className="ts-dialog-field">
                 {t("connect.onetimeGrant")}
@@ -2351,18 +2335,6 @@ function ConnectDialog({
                   <option value="auto">{t("connect.serverType.auto")}</option>
                   <option value="teamspeak">{t("connect.serverType.teamspeak")}</option>
                   <option value="teaspeak">{t("connect.serverType.teaspeak")}</option>
-                </select>
-              </label>
-              <label className="ts-dialog-field">
-                {t("connect.hotkeyProfile")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
-                </select>
-              </label>
-              <label className="ts-dialog-field">
-                {t("connect.soundPack")}
-                <select disabled defaultValue="Standard">
-                  <option>Standard</option>
                 </select>
               </label>
             </div>
@@ -3583,10 +3555,6 @@ function FavoritesDialog({
               />
             </label>
             <label className="ts-dialog-field">
-              {t("connect.phoneticNickname")}
-              <input disabled title={t("clientContext.notSupported")} />
-            </label>
-            <label className="ts-dialog-field">
               {t("connect.serverAddress")}
               <input
                 disabled={!selected}
@@ -3623,30 +3591,6 @@ function FavoritesDialog({
           </div>
 
           <div className="ts-favorites-profile-col">
-            <label className="ts-dialog-field">
-              {t("connect.identity")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
-            <label className="ts-dialog-field">
-              {t("connect.recordingProfile")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
-            <label className="ts-dialog-field">
-              {t("connect.playbackProfile")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
-            <label className="ts-dialog-field">
-              {t("connect.hotkeyProfile")}
-              <select disabled defaultValue="Standard">
-                <option>Standard</option>
-              </select>
-            </label>
             <label className="ts-dialog-field">
               {t("connect.soundPack")}
               <select
@@ -5739,7 +5683,6 @@ function IdentitiesDialog({
   onAdd,
   onRename,
   onNicknameChange,
-  onPhoneticChange,
   onDelete,
   onExport,
   onImport,
@@ -5754,7 +5697,6 @@ function IdentitiesDialog({
   onAdd: () => void;
   onRename: (id: string, name: string) => void;
   onNicknameChange: (id: string, value: string) => void;
-  onPhoneticChange: (id: string, value: string) => void;
   onDelete: (id: string) => void;
   onExport: (id: string) => void;
   onImport: (file: File) => void;
@@ -5818,13 +5760,7 @@ function IdentitiesDialog({
                     onChange={(e) => onNicknameChange(selected.id, e.target.value)}
                   />
                 </label>
-                <label className="ts-dialog-field">
-                  {t("identities.phoneticNickname")}
-                  <input
-                    value={selected.phoneticName}
-                    onChange={(e) => onPhoneticChange(selected.id, e.target.value)}
-                  />
-                </label>
+
                 <label className="ts-dialog-field">
                   {t("identities.uniqueId")}
                   <input
@@ -8596,10 +8532,12 @@ function OptionsDialog({
     OPTIONS_SECTIONS.find((s) => s.id === section) ?? OPTIONS_SECTIONS[0];
   const backdrop = useBackdropDismiss(onClose);
   return (
-    <div className="ts-dialog-backdrop" {...backdrop}>
+    <div
+      className="ts-dialog-backdrop"
+      {...backdrop}
+      aria-label="Chips settings"
+    >
       <div
-        role="dialog"
-        aria-modal="true"
         aria-label="Chips settings"
         className="ts-dialog ts-options-dialog"
         onClick={(e) => e.stopPropagation()}
@@ -9207,7 +9145,7 @@ function AppInner() {
   const [micOn, setMicOn] = useState(false);
   const [talkers, setTalkers] = useState<Set<number>>(new Set());
   const [selfActive, setSelfActive] = useState(false);
-  const [vadThreshold, setVadThreshold] = useState(0.02);
+  const [vadThreshold, setVadThreshold] = useState(() => loadNumberPref("chips:vad-threshold", 0.02));
   const [vadHangover, setVadHangover] = useState(() => loadNumberPref(VAD_HANGOVER_KEY, 0.3));
   const [pushToTalk, setPushToTalk] = useState(() => loadBoolPref(PUSH_TO_TALK_KEY, false));
   // Only matters while pushToTalk is off: send all the time instead of voice activation.
@@ -9454,6 +9392,7 @@ function AppInner() {
 
   useEffect(() => {
     if (micCaptureRef.current) micCaptureRef.current.threshold = vadThreshold;
+    localStorage.setItem("chips:vad-threshold", String(vadThreshold));
   }, [vadThreshold]);
 
   useEffect(() => {
@@ -10988,6 +10927,7 @@ function AppInner() {
   };
 
   const openAddFavorite = () => {
+    setOptionsSection("connection"); setOptionsDialogOpen(true);
     setFavoritesDialogMode({
       kind: "add",
       prefill: {
@@ -11003,6 +10943,7 @@ function AppInner() {
   };
 
   const openManageFavorites = () => {
+    setOptionsSection("connection"); setOptionsDialogOpen(true);
     setFavoritesDialogMode({ kind: "manage" });
     setFavoritesMenuOpen(false);
   };
@@ -11656,6 +11597,20 @@ function AppInner() {
     if (inputNode) micCaptureRef.current?.setMonitoring(next, inputNode);
   };
 
+  // Deafen is a runtime action, not a saved preference. Restore the prior
+  // microphone mute state rather than unexpectedly opening the mic.
+  const preDeafenInputMutedRef = useRef<boolean | null>(null);
+  const handleToggleDeafen = () => {
+    const deafening = !outputMutedRef.current;
+    const input = deafening ? true : (preDeafenInputMutedRef.current ?? inputMutedRef.current);
+    if (deafening) preDeafenInputMutedRef.current = inputMutedRef.current;
+    else preDeafenInputMutedRef.current = null;
+    inputMutedRef.current = input;
+    socketRef.current?.send(JSON.stringify({ type: "setInputMuted", muted: input }));
+    socketRef.current?.send(JSON.stringify({ type: "setOutputMuted", muted: deafening }));
+    void notify(deafening ? "SOUND_PLAYBACK_MUTED" : "SOUND_PLAYBACK_UNMUTED");
+  };
+
   const handleToggleOutputMuted = () => {
     socketRef.current?.send(JSON.stringify({ type: "setOutputMuted", muted: !outputMutedRef.current }));
     void notify(outputMutedRef.current ? "SOUND_PLAYBACK_UNMUTED" : "SOUND_PLAYBACK_MUTED");
@@ -11914,9 +11869,7 @@ function AppInner() {
     if (id === activeIdentityId) setNickname(value);
   };
 
-  const handleIdentityPhoneticChange = (id: string, value: string) => {
-    setIdentities((prev) => prev.map((i) => (i.id === id ? { ...i, phoneticName: value } : i)));
-  };
+
 
   const handleDeleteIdentity = (id: string) => {
     setIdentities((prev) => {
@@ -12769,7 +12722,7 @@ function AppInner() {
         void handleToggleMic();
       } else if (e.code === deafenBinding?.code) {
         e.preventDefault();
-        handleToggleOutputMuted();
+        handleToggleDeafen();
       }
     };
     window.addEventListener("keydown", key);
@@ -12905,15 +12858,8 @@ function AppInner() {
           </button>
           {favoritesMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
-              <button className="ts-menu-item" onClick={openAddFavorite}>
-                <span className="ts-menu-item-icon">⭐</span>
-                <span className="ts-menu-item-label">{t("menu.favorites.add")}</span>
-                <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+B</span>
-              </button>
-              <button className="ts-menu-item" onClick={openManageFavorites}>
-                <span className="ts-menu-item-icon">🗂️</span>
-                <span className="ts-menu-item-label">{t("menu.favorites.manage")}</span>
-              </button>
+
+
               {favorites.length > 0 && <div className="ts-menu-separator" />}
               {favorites.map((f) => (
                 <button
@@ -12943,22 +12889,6 @@ function AppInner() {
           </button>
           {selfMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🎙️</span>
-                <span className="ts-menu-item-label">{t("menu.self.recordingProfile")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🔊</span>
-                <span className="ts-menu-item-label">{t("menu.self.playbackProfile")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">⌨️</span>
-                <span className="ts-menu-item-label">{t("menu.self.hotkeyProfile")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🔔</span>
-                <span className="ts-menu-item-label">{t("menu.self.soundPack")}</span>
-              </button>
               <div className="ts-menu-separator" />
               <button
                 className="ts-menu-item"
@@ -12999,30 +12929,7 @@ function AppInner() {
                 </span>
               </button>
               <div className="ts-menu-separator" />
-              <button
-                className="ts-menu-item"
-                disabled={!connected}
-                onClick={() => {
-                  setNicknameDraft(nickname);
-                  setChangeNicknameOpen(true);
-                  setSelfMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon">✎</span>
-                <span className="ts-menu-item-label">{t("menu.self.changeNickname")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🗣️</span>
-                <span className="ts-menu-item-label">{t("menu.self.requestTalkPower")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🖼️</span>
-                <span className="ts-menu-item-label">{t("menu.self.setAvatar")}</span>
-              </button>
-              <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">🔤</span>
-                <span className="ts-menu-item-label">{t("menu.self.setPhoneticNickname")}</span>
-              </button>
+
               <div className="ts-menu-separator" />
               <button
                 className="ts-menu-item"
@@ -13724,7 +13631,6 @@ function AppInner() {
           onAdd={handleAddIdentity}
           onRename={handleRenameIdentity}
           onNicknameChange={handleIdentityNicknameChange}
-          onPhoneticChange={handleIdentityPhoneticChange}
           onDelete={handleDeleteIdentity}
           onExport={handleExportIdentity}
           onImport={handleImportIdentity}
@@ -13902,241 +13808,252 @@ function AppInner() {
       )}
 
       {profileEditorOpen && <ProfileStyleEditor value={profileStyle} onChange={updateProfile} onClose={() => setProfileEditorOpen(false)} />}
-      {optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && (
+      {optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && !changeNicknameOpen && (
         <OptionsDialog
           hubPanels={{
-  connection: (
-    <>
-      <h3>Connection</h3>
-      <label className="ts-dialog-field">
-        Server address and port
-        <input
-          value={host}
-          placeholder="wwts.ir:1694"
-          onChange={(e) => {
-            setHost(e.target.value);
-            localStorage.setItem(LAST_HOST_KEY, e.target.value);
+            connection: (
+              <>
+                <h3>Connection</h3>
+                <button onClick={openManageFavorites}>Manage server presets</button>
+                <button onClick={openAddFavorite}>Save server preset</button>
+                <button
+                  disabled={!connected}
+                  onClick={() => {
+                    setNicknameDraft(nickname);
+                    setChangeNicknameOpen(true);
+                  }}
+                >
+                  Change current nickname
+                </button>
+                <label className="ts-dialog-field">
+                  Server address and port
+                  <input
+                    value={host}
+                    placeholder="wwts.ir:1694"
+                    onChange={(e) => {
+                      setHost(e.target.value);
+                      localStorage.setItem(LAST_HOST_KEY, e.target.value);
+                    }}
+                  />
+                </label>
+                <label className="ts-dialog-field">
+                  Nickname
+                  <input
+                    value={nickname}
+                    onChange={(e) => {
+                      setNickname(e.target.value);
+                      localStorage.setItem(LAST_NICKNAME_KEY, e.target.value);
+                    }}
+                  />
+                </label>
+                <label className="ts-dialog-field">
+                  Identity
+                  <select
+                    value={activeIdentityId ?? ""}
+                    onChange={(e) => setActiveIdentityId(e.target.value)}
+                  >
+                    {identities.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button onClick={() => setIdentitiesOpen(true)}>Manage identities</button>
+                <label className="ts-options-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={autoConnect}
+                    onChange={(e) => {
+                      setAutoConnect(e.target.checked);
+                      localStorage.setItem(
+                        "chips:auto-connect",
+                        e.target.checked ? "on" : "off",
+                      );
+                    }}
+                  />
+                  Auto-connect on launch
+                </label>
+                <p>
+                  Connection changes apply on the next connection. Passwords are entered
+                  in Connect.
+                </p>
+                <button
+                  onClick={() => {
+                    setOptionsDialogOpen(false);
+                    setConnectDialogOpen(true);
+                  }}
+                >
+                  Open Connect
+                </button>
+                <AnwendungPanel
+                  showServerBanner={showServerBanner}
+                  onShowServerBannerChange={(on) => {
+                    setShowServerBanner(on);
+                    localStorage.setItem(SERVER_BANNER_KEY, on ? "on" : "off");
+                  }}
+                  chatImages={chatImages}
+                  onChatImagesChange={(on) => {
+                    setChatImages(on);
+                    localStorage.setItem(CHAT_IMAGES_KEY, on ? "on" : "off");
+                  }}
+                />
+                <SecurityPanel
+                  onOpenIdentities={() => setIdentitiesOpen(true)}
+                  onClearCache={handleClearCache}
+                />
+                <DownloadsPanel />
+                <KontoPanel />
+              </>
+            ),
+            hotkeys: (
+              <fieldset className="ts-options-fieldset">
+                <legend>Mute & deafen</legend>
+                <p>
+                  While Chips is focused. Escape cancels recording. Use keyboard bindings.
+                </p>
+                <label>
+                  Mute{" "}
+                  <PttKeyButton
+                    keyboardOnly
+                    binding={muteBinding}
+                    onChange={(b) => {
+                      if (b.code === deafenBinding?.code || b.code === pttBinding?.code) {
+                        alert("Choose a different key: this key is already bound.");
+                        return;
+                      }
+                      setMuteBinding(b);
+                      localStorage.setItem("chips:mute-binding", JSON.stringify(b));
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    setMuteBinding(null);
+                    localStorage.removeItem("chips:mute-binding");
+                  }}
+                >
+                  Clear mute
+                </button>
+                <label>
+                  Deafen{" "}
+                  <PttKeyButton
+                    keyboardOnly
+                    binding={deafenBinding}
+                    onChange={(b) => {
+                      if (b.code === muteBinding?.code || b.code === pttBinding?.code) {
+                        alert("Choose a different key: this key is already bound.");
+                        return;
+                      }
+                      setDeafenBinding(b);
+                      localStorage.setItem("chips:deafen-binding", JSON.stringify(b));
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    setDeafenBinding(null);
+                    localStorage.removeItem("chips:deafen-binding");
+                  }}
+                >
+                  Clear deafen
+                </button>
+              </fieldset>
+            ),
+            sounds: (
+              <p>
+                Desktop notifications are not available in this build; in-app
+                notifications and event sounds are supported.
+              </p>
+            ),
+            design: (
+              <>
+                <h3>Appearance</h3>
+                <DesignPanel
+                  designSelection={designSelection}
+                  onSelectionChange={handleDesignSelectionChange}
+                  customThemes={customThemes}
+                  onSaveCustomTheme={handleSaveCustomTheme}
+                  onDeleteCustomTheme={handleDeleteCustomTheme}
+                  idePixelFont={idePixelFont}
+                  onIdePixelFontChange={(on) => {
+                    setIdePixelFont(on);
+                    localStorage.setItem(IDE_PIXEL_FONT_KEY, on ? "on" : "off");
+                  }}
+                  reduceMotion={reduceMotion}
+                  onReduceMotionChange={handleReduceMotionChange}
+                />
+                <label className="ts-options-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={theme === "dark"}
+                    onChange={(e) => {
+                      setTheme(e.target.checked ? "dark" : "light");
+                      localStorage.setItem(
+                        "chips:brightness",
+                        e.target.checked ? "dark" : "light",
+                      );
+                    }}
+                  />
+                  Dark appearance
+                </label>
+                <h4>Accent</h4>
+                <AccentSwitcher accent={accent} onChange={handleAccentChange} />
+                <label className="ts-dialog-field">
+                  Liquid Glass intensity
+                  <select
+                    value={glassIntensity}
+                    onChange={(e) => {
+                      setGlassIntensity(e.target.value);
+                      localStorage.setItem("chips:glass-intensity", e.target.value);
+                    }}
+                  >
+                    <option value="0">Off</option>
+                    <option value="0.5">Subtle</option>
+                    <option value="1">Full</option>
+                  </select>
+                </label>
+                <label>
+                  Name-style default
+                  <select
+                    value={nameStyle.style}
+                    onChange={(e) =>
+                      updateProfile({
+                        ...profileStyle,
+                        name: {
+                          ...nameStyle,
+                          style: e.target.value as NameStyleConfig["style"],
+                        },
+                      })
+                    }
+                  >
+                    {NAME_STYLES.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <ChatPanel />
+                <p>
+                  <strong>Theme files — Step 7 (not implemented).</strong> .chipstheme
+                  import/export will live here.
+                </p>
+              </>
+            ),
+            profile: (
+              <>
+                <h3>Profile</h3>
+                <p>
+                  Customize your name, avatar, banner, status and card using the existing
+                  profile panel.
+                </p>
+                <button onClick={() => setProfileEditorOpen(true)}>
+                  Customize profile
+                </button>
+              </>
+            ),
           }}
-        />
-      </label>
-      <label className="ts-dialog-field">
-        Nickname
-        <input
-          value={nickname}
-          onChange={(e) => {
-            setNickname(e.target.value);
-            localStorage.setItem(LAST_NICKNAME_KEY, e.target.value);
-          }}
-        />
-      </label>
-      <label className="ts-dialog-field">
-        Identity
-        <select
-          value={activeIdentityId ?? ""}
-          onChange={(e) => setActiveIdentityId(e.target.value)}
-        >
-          {identities.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button onClick={() => setIdentitiesOpen(true)}>Manage identities</button>
-      <label className="ts-options-checkbox">
-        <input
-          type="checkbox"
-          checked={autoConnect}
-          onChange={(e) => {
-            setAutoConnect(e.target.checked);
-            localStorage.setItem(
-              "chips:auto-connect",
-              e.target.checked ? "on" : "off",
-            );
-          }}
-        />
-        Auto-connect on launch
-      </label>
-      <p>
-        Connection changes apply on the next connection. Passwords are entered
-        in Connect.
-      </p>
-      <button
-        onClick={() => {
-          setOptionsDialogOpen(false);
-          setConnectDialogOpen(true);
-        }}
-      >
-        Open Connect
-      </button>
-      <AnwendungPanel
-        showServerBanner={showServerBanner}
-        onShowServerBannerChange={(on) => {
-          setShowServerBanner(on);
-          localStorage.setItem(SERVER_BANNER_KEY, on ? "on" : "off");
-        }}
-        chatImages={chatImages}
-        onChatImagesChange={(on) => {
-          setChatImages(on);
-          localStorage.setItem(CHAT_IMAGES_KEY, on ? "on" : "off");
-        }}
-      />
-      <SecurityPanel
-        onOpenIdentities={() => setIdentitiesOpen(true)}
-        onClearCache={handleClearCache}
-      />
-      <DownloadsPanel />
-      <KontoPanel />
-    </>
-  ),
-  hotkeys: (
-    <fieldset className="ts-options-fieldset">
-      <legend>Mute & deafen</legend>
-      <p>
-        While Chips is focused. Escape cancels recording. Use keyboard bindings.
-      </p>
-      <label>
-        Mute{" "}
-        <PttKeyButton
-          keyboardOnly
-          binding={muteBinding}
-          onChange={(b) => {
-            if (b.code === deafenBinding?.code || b.code === pttBinding?.code) {
-              alert("Choose a different key: this key is already bound.");
-              return;
-            }
-            setMuteBinding(b);
-            localStorage.setItem("chips:mute-binding", JSON.stringify(b));
-          }}
-        />
-      </label>
-      <button
-        onClick={() => {
-          setMuteBinding(null);
-          localStorage.removeItem("chips:mute-binding");
-        }}
-      >
-        Clear mute
-      </button>
-      <label>
-        Deafen{" "}
-        <PttKeyButton
-          keyboardOnly
-          binding={deafenBinding}
-          onChange={(b) => {
-            if (b.code === muteBinding?.code || b.code === pttBinding?.code) {
-              alert("Choose a different key: this key is already bound.");
-              return;
-            }
-            setDeafenBinding(b);
-            localStorage.setItem("chips:deafen-binding", JSON.stringify(b));
-          }}
-        />
-      </label>
-      <button
-        onClick={() => {
-          setDeafenBinding(null);
-          localStorage.removeItem("chips:deafen-binding");
-        }}
-      >
-        Clear deafen
-      </button>
-    </fieldset>
-  ),
-  sounds: (
-    <p>
-      Desktop notifications are not available in this build; in-app
-      notifications and event sounds are supported.
-    </p>
-  ),
-  design: (
-    <>
-      <h3>Appearance</h3>
-      <DesignPanel
-        designSelection={designSelection}
-        onSelectionChange={handleDesignSelectionChange}
-        customThemes={customThemes}
-        onSaveCustomTheme={handleSaveCustomTheme}
-        onDeleteCustomTheme={handleDeleteCustomTheme}
-        idePixelFont={idePixelFont}
-        onIdePixelFontChange={(on) => {
-          setIdePixelFont(on);
-          localStorage.setItem(IDE_PIXEL_FONT_KEY, on ? "on" : "off");
-        }}
-        reduceMotion={reduceMotion}
-        onReduceMotionChange={handleReduceMotionChange}
-      />
-      <label className="ts-options-checkbox">
-        <input
-          type="checkbox"
-          checked={theme === "dark"}
-          onChange={(e) => {
-            setTheme(e.target.checked ? "dark" : "light");
-            localStorage.setItem(
-              "chips:brightness",
-              e.target.checked ? "dark" : "light",
-            );
-          }}
-        />
-        Dark appearance
-      </label>
-      <h4>Accent</h4>
-      <AccentSwitcher accent={accent} onChange={handleAccentChange} />
-      <label className="ts-dialog-field">
-        Liquid Glass intensity
-        <select
-          value={glassIntensity}
-          onChange={(e) => {
-            setGlassIntensity(e.target.value);
-            localStorage.setItem("chips:glass-intensity", e.target.value);
-          }}
-        >
-          <option value="0">Off</option>
-          <option value="0.5">Subtle</option>
-          <option value="1">Full</option>
-        </select>
-      </label>
-      <label>
-        Name-style default
-        <select
-          value={nameStyle.style}
-          onChange={(e) =>
-            updateProfile({
-              ...profileStyle,
-              name: {
-                ...nameStyle,
-                style: e.target.value as NameStyleConfig["style"],
-              },
-            })
-          }
-        >
-          {NAME_STYLES.map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <ChatPanel />
-      <p>
-        <strong>Theme files — Step 7 (not implemented).</strong> .chipstheme
-        import/export will live here.
-      </p>
-    </>
-  ),
-  profile: (
-    <>
-      <h3>Profile</h3>
-      <p>
-        Customize your name, avatar, banner, status and card using the existing
-        profile panel.
-      </p>
-      <button onClick={() => setProfileEditorOpen(true)}>
-        Customize profile
-      </button>
-    </>
-  ),
-}}
           onOpenWhisperLists={() => setWhisperListsOpen(true)}
           onOpenFavorites={openManageFavorites}
           // Native's ✔: the chosen pack becomes every favorite's pack (drop their overrides).
@@ -15034,10 +14951,10 @@ function AppInner() {
         })}
       </div>
       <div className="chips-self-bar" data-lg>
-        <span className="chips-self-avatar">{(nickname || "?").slice(0,1).toUpperCase()}</span>
+        <span className="chips-self-avatar">{profileStyle.avatarImage ? <img src={profileStyle.avatarImage} alt="Your avatar"/> : ownClient ? <AvatarTile client={ownClient} images={serverIconImages} className="ts-client-avatar" isSelf/> : (nickname || "?").slice(0,1).toUpperCase()}</span>
         <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
         <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? "🎙" : "🔇"}</button>
-        <button onClick={handleToggleOutputMuted} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}>🎧</button>
+        <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}>🎧</button>
         <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings">⚙</button>
       </div>
       <NewsTicker />

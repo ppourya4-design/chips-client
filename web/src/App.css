@@ -5009,3 +5009,5 @@ input.ts-identities-uid {
 .ts-app.ts-design-glass[data-glass-intensity="0"] :is([data-lg], .ts-dialog, .ts-menu) { backdrop-filter:none !important; }
 .ts-app.ts-design-glass[data-glass-intensity="0.5"] :is([data-lg], .ts-dialog, .ts-menu) { backdrop-filter:blur(10px) saturate(120%) !important; }
 .chips-profile-editor { max-height:85vh; width:min(680px, 94vw); overflow:auto; }
+
+.chips-self-avatar :is(img, .ts-client-avatar) { width:32px; height:32px; border-radius:50%; object-fit:cover; }

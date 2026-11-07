@@ -446,3 +446,108 @@ side with the same toolchain:
 The JS delta is the bridge plumbing (+ description in the snapshot, the event mapping, the
 `setdescription` command, the in-place client patch); the CSS shrank because the dead popover
 keyframes are gone.
+
+## Step 6 — one settings hub (no Step 7 implementation)
+
+The **gear in the persistent bottom self-bar**, beside the own avatar, mute and deafen,
+opens the six-section Chips settings hub in every layout, including while disconnected.
+Changes are applied/saved immediately; the footer says so and has **Done**, not a misleading
+Cancel button. The existing dialog focus trap, Escape/backdrop dismissal and focus restoration
+are reused. Identity, preset, whisper-list and profile editors are children of the hub: the
+hub is suspended while a child is open and returns to the same section when it closes.
+The profile editor now uses that same real modal/focus-trap styling (its inherited
+`ts-modal` classes had no stylesheet). No new package or native capability was added.
+
+### Consolidation map
+
+| Previous location | Hub destination / disposition |
+|---|---|
+| Extras → Options; Nova Connect gear | Removed. Settings' primary entry is the bottom self-bar gear. Existing `#options/<section>` deep links for retained IDs still open the same hub, not another dialog. |
+| Options → Application | **Connection**, additional connection/session and privacy preferences (server banner and chat-image policy). |
+| Extras → Identities; Options → Security → Identities | **Connection → Manage identities**, retaining local identity generation/import/export and nickname handling. Security/password/cache preferences are also in Connection. |
+| Favorites → Manage/Add | **Connection → Manage/Save server presets**, including real per-server sound-pack overrides. Ctrl+B and the server context save action open this child through the Connection hub. The Favorites top menu now only quick-connects saved presets. |
+| Self → Change nickname | **Connection → Change current nickname** (connected only). The default/next-connect nickname and address:port are editable and saved even without connecting. Connect remains a session action with password, channel and privilege-key entry, not a parallel global-preferences dialog. |
+| Options → Playback / Capture; toolbar output-device picker and VAD slider | **Audio**: device selection, playback volume, automatic leveling, mic clicks, activation/PTT/continuous mode, VAD threshold/hangover, mic test, typing attenuation, native echo/noise/AGC and optional bundled AEC3. These are the existing WebView2/browser audio controls, not invented connector DSP commands. |
+| Options → Whisper; Extras → Whisper lists | **Audio**, including the existing whisper-list child editor. Immediate whisper targets remain runtime actions in the toolbar, not saved app preferences. |
+| Options → Hotkeys | **Hotkeys**, existing PTT binding plus new independently saved mute/deafen keyboard bindings and clear actions. Duplicate PTT/mute/deafen keys are refused. These are explicitly **focused-window** shortcuts, not system-wide hotkeys; typing and open editors suppress mute/deafen actions. PTT keeps its existing keyboard/mouse behavior. |
+| Options → Sounds / Notifications / Messages | **Notifications & sounds**, keeping event enable/volume/test/custom-audio/sound-pack controls, native-style notification tree and in-app text positions, disconnect message and away presets. Join/leave/message/poke remain the same working event routes. |
+| Options → Design → Motion | **Appearance → Motion → Reduce animations**, same `chips-reduce-motion` class and OS-preference override. |
+| Toolbar accent swatches and light/dark button; Options → Design | **Appearance**: existing Step 2 layouts and four accents, persistent brightness, icon-pack selection, tree/GIF preferences, IDE font, plus Liquid Glass **Off / Subtle / Full** and name-style default. Full uses the existing bounded refraction engine; Subtle uses a plain 10px blur; Off disables backdrop filters including fallback surfaces. No extra animated layer or refraction budget was added. |
+| Options → Chat | **Appearance**, retaining font, history and chat display preferences. |
+| Options → Downloads | **Connection**, additional transfer preferences. Folder/save-picker controls only render when the runtime exposes the corresponding browser API. |
+| Top-bar Profile style | **Profile → Customize profile**, opening the existing Step 4 panel, including the existing `styles.json` profile transfer (not a theme-file format). |
+| Options → Account | Connection has the existing desktop local-only notice; no account/login control is exposed in Tauri. |
+
+### Hidden/dropped controls and reasons
+
+- Removed inherited disabled **recording/playback/hotkey profiles**, fake Connect sound-pack
+  selector, favorite-specific identity selector, and phonetic nickname fields in Connect,
+  preset editing and the identity editor. There is one working audio/hotkey configuration,
+  not a profile engine, and no phonetic speech engine. Imported identity phonetic metadata
+  remains preserved; protocol/identity formats were not changed.
+- Removed disabled Self-menu recording/playback/hotkey/sound-pack selectors, avatar/phonetic
+  actions and unsupported talk-power request. Profile customization has a real hub entry;
+  no disabled replacement is presented.
+- Removed the unavailable **subscribe-current-channel-only**, **Overwolf**, **badges** and
+  **hide inaccessible groups** controls. The connector subscribes all channels; the other
+  integrations aren't implemented here. Working tree preferences remain.
+- No **desktop notification** permission/toggle is shown: there is no Tauri notification
+  plugin/capability or native notification implementation in this build. A plain explanatory
+  sentence is in Notifications & sounds; in-app notifications and sounds still work.
+- No manual **capture-volume** slider is fabricated: the capture pipeline has no manual input
+  gain setter. Capture device/activation and working AGC are available; playback and event
+  volumes are independent real controls.
+- No system-wide hotkey toggle: no native global-shortcut plugin exists. Mute/deafen bindings
+  are keyboard-only; PTT still supports its existing mouse bindings. Deafen sends the existing
+  input/output-mute commands together and restores the prior input-mute state on undeafen,
+  rather than opening a previously muted microphone.
+- The legacy custom-theme manager/store entry is hidden. Previously saved custom layouts
+  remain selectable; **`.chipstheme` import/export is only an explicitly marked Step 7 text
+  placeholder**, with no file picker, parser, exporter, or theme-file implementation added.
+- Extensions' unimplemented placeholder section is gone. Cloud account/sync/store controls
+  remain unavailable in desktop as required by the Step 2 no-calls-home audit.
+
+Runtime actions (connect/disconnect, mute/output mute/PTT, away, whisper targets, chat and
+server/channel administration) remain available where useful. They aren't persistent global
+settings. Server/channel administration and contact editing are not app preferences and were
+not migrated or altered by this step.
+
+### Persistence, safety and weight
+
+Existing audio/design/theme/icon/chat/security/notification/download/profile keys and stores
+are retained, so current users keep their preferences. New keys are `chips:auto-connect`
+(default off), `chips:brightness`, `chips:glass-intensity` (validated, default Full),
+`chips:mute-binding`, `chips:deafen-binding`, `chips:output-device` and `chips:vad-threshold`.
+The audit fixed **three inherited persistence gaps**: output-device choice, VAD threshold,
+and resetting capture device to system default (the empty ID now overwrites the saved ID).
+Sound output routing is restored alongside voice routing. Invalid saved action bindings are
+ignored. Auto-connect is opt-in and uses the saved host/nickname/identity on the next launch;
+the fresh-install preset remains **wwts.ir:1694** without auto-connect.
+
+No telemetry, URL, dependency, Node process, native command, capability or CSP change was added.
+`connector/`, `gateway/`, `tsclientlib/`, both lockfiles and package manifests are untouched.
+The existing no-calls-home audit still applies; no packet capture is claimed. English/LTR,
+no-glow and motion-policy restrictions are unchanged. Self-bar avatars use existing avatar
+rendering or the local profile image, with no orbiting-dot decoration. The weight budget is
+unchanged: no framework/plugin and no new timer/animation loop; intensity modes never add a
+filter pass. The bundle remains approximately 400–406 kB App JS / 102–103 kB gzip (Step 5:
+403 kB / 102 kB); this is not an installed-size or RAM measurement.
+
+### QA evidence and remaining real-PC checks
+
+Local Linux gates: `npm run build --prefix web` succeeds; `npm run lint --prefix web` has
+**0 errors / the same 11 inherited warnings**; `gateway/node_modules/.bin/tsx --test
+web/tests/*.test.ts` passes **17/17**. Windows CI now also runs `settings-hub.test.ts` alongside
+the desktop bridge and motion-policy tests. New coverage exercises saved binding reload/clear,
+invalid storage, glass-value validation, six-section/single-entry structure, removal of toolbar
+preferences, child-modal visibility, the Step 7 placeholder, device/default/VAD persistence
+wiring, filter fallback modes and deafen command/state restoration wiring. Structural tests are
+explicitly source-level assertions, **not** a browser interaction or real Windows audio test.
+
+This sandbox has no browser engine or Windows desktop. Remaining manual Windows acceptance:
+open the gear in each layout while disconnected/connected; Tab/Escape/return from each child;
+change every exposed preference and restart; test mic permission/device switch/test tone,
+VAD/PTT/mute/deafen (especially restoring a previously muted mic), sound events and auto-connect
+on/off against the real server. As in Step 5, a green installer build proves compilation and
+packaging, not live server/voice, WebView rendering or runtime traffic. The final PR/report
+links the exact final-commit Windows run and **Chips-win-x64** artifact. Stop after Step 6.
