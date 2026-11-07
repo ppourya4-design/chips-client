@@ -73,4 +73,4 @@
   <symbol id="ui-star" viewBox="0 0 24 24"><path d="M12 2l3 6 7 2-5 5 1 7-6-3-6 3 1-7-5-5 7-2 3-6"/></symbol>
   <symbol id="ui-coffee" viewBox="0 0 24 24"><path d="M3 8h14v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8m14 0h3a3 3 0 0 1 0 6h-3M6 2v3m5-3v3"/></symbol>
   <symbol id="ui-code" viewBox="0 0 24 24"><path d="M8 5l-7 7 7 7m8-14 7 7-7 7m-3-17-2 20"/></symbol>
-<symbol id="ui-up" viewBox="0 0 24 24"><path d="M12 21V3m-7 7 7-7 7 7"/></symbol><symbol id="ui-down" viewBox="0 0 24 24"><path d="M12 3v18m-7-7 7 7 7-7"/></symbol></svg>
+<symbol id="ui-up" viewBox="0 0 24 24"><path d="M12 21V3m-7 7 7-7 7 7"/></symbol><symbol id="ui-down" viewBox="0 0 24 24"><path d="M12 3v18m-7-7 7 7 7-7"/></symbol><symbol id="ui-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol><symbol id="ui-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol><symbol id="ui-back" viewBox="0 0 24 24"><path d="M21 12H3m7-7-7 7 7 7"/></symbol><symbol id="ui-unread" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/></symbol></svg>

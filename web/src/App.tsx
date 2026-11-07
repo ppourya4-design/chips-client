@@ -2743,7 +2743,7 @@ function StreamSettingsDialog({
             className="ts-stream-settings-section ts-stream-settings-expand"
             onClick={() => setAdvanced((v) => !v)}
           >
-            {t("publish.dialog.advanced")} <span>{advanced ? "⌄" : "›"}</span>
+            {t("publish.dialog.advanced")} <span>{advanced ? <UiIcon name="chevron-down"/> : <UiIcon name="chevron-right"/>}</span>
           </button>
 
           {advanced && (
@@ -2769,8 +2769,8 @@ function StreamSettingsDialog({
               <div className="ts-stream-settings-row">
                 <span>{t("publish.bitrate")}</span>
                 <div className="ts-stream-settings-stepper">
-                  <button type="button" onClick={() => custom(setVideoBitrateKbps)(Math.max(200, videoBitrateKbps - 500))}>
-                    −
+                  <button type="button" aria-label="Decrease video bitrate" onClick={() => custom(setVideoBitrateKbps)(Math.max(200, videoBitrateKbps - 500))}>
+                    <UiIcon name="minus"/>
                   </button>
                   <input
                     type="number"
@@ -2799,8 +2799,8 @@ function StreamSettingsDialog({
               <div className="ts-stream-settings-row">
                 <span>{t("publish.viewerLimit")}</span>
                 <div className="ts-stream-settings-stepper">
-                  <button type="button" onClick={() => setViewerLimit(Math.max(0, viewerLimit - 1))}>
-                    −
+                  <button type="button" aria-label="Decrease viewer limit" onClick={() => setViewerLimit(Math.max(0, viewerLimit - 1))}>
+                    <UiIcon name="minus"/>
                   </button>
                   <input
                     type="number"
@@ -4133,7 +4133,7 @@ function OfflineMessagesDialog({
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.messageId}>
-                    <td>{e.isRead ? "" : "●"}</td>
+                    <td>{e.isRead ? "" : <UiIcon name="unread"/>}</td>
                     <td>
                       <a href="#" onClick={(ev) => { ev.preventDefault(); onSelect(e.messageId); }}>
                         {e.subject}
@@ -7695,7 +7695,7 @@ function DesignPanel({
       <>
         <h3>{t("design.manage.title")}</h3>
         <button className="ts-design-back" onClick={() => setManageOpen(false)}>
-          ← {t("design.store.back")}
+          <UiIcon name="back"/> {t("design.store.back")}
         </button>
       <div className="ts-design-theme-grid">
         {builtins.map((th) => (
@@ -8092,7 +8092,7 @@ function DesignStorePanel({
     <>
       <div className="ts-design-store-header">
         <button className="ts-design-store-back" onClick={onClose}>
-          ← {t("design.store.back")}
+          <UiIcon name="back"/> {t("design.store.back")}
         </button>
         <h3>{t("design.store.title")}</h3>
       </div>

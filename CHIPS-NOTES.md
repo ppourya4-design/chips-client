@@ -694,12 +694,12 @@ not strip emoji from dynamic user content.
 
 ### Follow-up validation
 
-On the final follow-up source: **32/32 tests pass** (bridge, motion policy, hub coverage,
+On the final follow-up source: **33/33 tests pass** (bridge, motion policy, hub coverage,
 keyboard persistence/chords/clear, audio DSP routing/PCM tests, broadcast-default storage and
 vector-icon policy). Production `tsc`/Vite build passes; lint is **0 errors / 11 inherited
 warnings**. No dependency/lockfile, telemetry, native capability, CSP, connector, gateway or
 `tsclientlib` change. The App bundle is about **410 kB / 104.5 kB gzip** plus ~9 kB of local
-SVG sprite paths and a tiny send mask; no new runtime framework or process. The installed-size/
+SVG sprite paths and tiny send/chevron masks; no new runtime framework or process. The installed-size/
 RAM weight budget was not relaxed, and real Windows RAM was not measured in this sandbox.
 
 A final Windows Actions installer run on the pushed final commit is required and linked in
@@ -707,3 +707,5 @@ PR #6 and the final report. Artifact remains **Chips-win-x64**. The earlier 18-t
 not presented as proof for these additions. Real Windows device/voice/two-client/visual checks
 still require a Windows PC; mocked DSP tests are not acoustic testing. No Step 7 implementation
 or merge has been performed.
+
+The final vector sweep also replaces legacy disclosure chevrons, stepper minus, unread-dot and back-arrow glyphs with SVGs; a dedicated guard covers these non-emoji control icons.

@@ -39,3 +39,11 @@ test("icon-pack import/render only accepts SVG UI assets; raster entries fall ba
  assert.equal(iconPackCss({id:"old",name:"old",icons:{soundMuted:"data:image/png;base64,AA=="}}),"");
  assert.match(iconPackCss(pack!),/data:image\/svg\+xml/);
 });
+
+
+test("legacy control chevrons, minus, unread dots and back arrows are also vectors",()=>{
+ const app=source("../src/App.tsx");
+ assert.doesNotMatch(app, /[⌄›●←−]/u);
+ assert.doesNotMatch(source("../src/App.css"), /content: "[^"\n]*[▾➤]/u);
+ assert.doesNotMatch(source("../src/styles/ide.css"), /content: "\\25BE"/);
+});
