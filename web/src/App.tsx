@@ -1,3 +1,4 @@
+import { UiIcon } from "./UiIcon";
 import { loadActionBinding, loadGlassIntensity } from "./settings";
 import {
   createContext,
@@ -1264,7 +1265,7 @@ function FileTransfersWindow({
       <div className="ts-dialog-titlebar">
         <span>{t("transfers.title")}</span>
         <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-          ✕
+          <UiIcon name="close" />
         </button>
       </div>
       <div className="ts-dialog-body">
@@ -1275,7 +1276,7 @@ function FileTransfersWindow({
             <tbody>
               {transfers.map((x) => (
                 <tr key={x.id} className={`ts-transfer-${x.status}`}>
-                  <td title={t(`transfers.${x.dir}`)}>{x.dir === "down" ? "⬇" : "⬆"}</td>
+                  <td title={t(`transfers.${x.dir}`)}>{x.dir === "down" ? <UiIcon name="down" /> : <UiIcon name="up" />}</td>
                   <td className="ts-transfers-name" title={x.path}>
                     {x.name}
                   </td>
@@ -1421,13 +1422,13 @@ function ClientStatusIcons({ client }: { client: ClientInfo }) {
   // Mute is shown on the TalkLamp; keep secondary flags here.
   return (
     <span className="ts-status-icons">
-      {client.isChannelCommander && !tree.commanderLamp && <span title={t("tree.channelCommander")}>⭐</span>}
-      {client.away && <span title={t("tree.away")} data-pack-icon="away">💤</span>}
+      {client.isChannelCommander && !tree.commanderLamp && <span title={t("tree.channelCommander")}><UiIcon name="star" /></span>}
+      {client.away && <span title={t("tree.away")} data-pack-icon="away"><UiIcon name="away" /></span>}
       {!client.inputMuted && client.inputHardwareEnabled && !client.hasTalkPower && (
-        <span title={t("tree.noTalkPower")}>🔒</span>
+        <span title={t("tree.noTalkPower")}><UiIcon name="lock" /></span>
       )}
-      {client.outputMuted && <span title={t("tree.soundMuted")} data-pack-icon="soundMuted">🔕</span>}
-      {client.isStreaming && <span title={t("tree.streaming")}>📺</span>}
+      {client.outputMuted && <span title={t("tree.soundMuted")} data-pack-icon="soundMuted"><UiIcon name="volume-off" /></span>}
+      {client.isStreaming && <span title={t("tree.streaming")}><UiIcon name="screen" /></span>}
     </span>
   );
 }
@@ -1726,7 +1727,7 @@ function ChannelTree({
               <span className="ts-tree-label">{channel.name}</span>
             )}
             {!spacer.isSpacer && channel.hasPassword && (
-              <span title={t("tree.passwordProtected")}>🔒</span>
+              <span title={t("tree.passwordProtected")}><UiIcon name="lock" /></span>
             )}
           </div>
           {tree.clientsBelow && subTree}
@@ -1814,7 +1815,7 @@ function ChannelTree({
         );
       })}
     </ul>
-    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile">×</button><div className="chips-profile-banner" style={{background:profileClient.id===ownClientId&&loadProfileStyle().bannerImage?`center/cover url(\"${loadProfileStyle().bannerImage}\")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
+    {profileClient && (() => { const style = parseStyleToken(profileClient.description ?? ""); const roles = (profileClient.serverGroups || []).map(id => serverGroups?.find(g=>g.id===id)).filter((g): g is GroupEntry => !!g); return <div className="chips-profile-backdrop" onClick={()=>setProfileClientId(null)}><section className="chips-profile-card chips-electric-border" style={profileClient.id===ownClientId?{background:`linear-gradient(145deg,${loadProfileStyle().card.join(",")})`}:style?.card?{background:`linear-gradient(145deg,${style.card.join(",")})`}:undefined} data-chips-anim onClick={e=>e.stopPropagation()}><button className="chips-profile-close" onClick={()=>setProfileClientId(null)} aria-label="Close profile"><UiIcon name="close" /></button><div className="chips-profile-banner" style={{background:profileClient.id===ownClientId&&loadProfileStyle().bannerImage?`center/cover url(\"${loadProfileStyle().bannerImage}\")`:`linear-gradient(${style?.direction ?? 135}deg,${style?.banner.join(",") ?? "#74e5ff,#a74cfd"})`}}/><div className="chips-profile-avatar"><AvatarRing ring={style?.ring ?? "gradient"} speaking={talkers.has(profileClient.id) && style?.talk !== false}>{profileClient.id===ownClientId&&loadProfileStyle().avatarImage?<img src={loadProfileStyle().avatarImage} alt="" style={{width:70,height:70,borderRadius:"50%",objectFit:"cover"}}/>:<AvatarTile client={profileClient} images={groupIconImages} className="ts-client-avatar" isSelf={profileClient.id===ownClientId}/>}</AvatarRing></div><h3><NamePlate text={profileClient.name} premium={Boolean(style)} config={style?.name} speaking={talkers.has(profileClient.id) && style?.talk !== false}/></h3><div className="chips-profile-status">{style?.status || profileClient.awayMessage || ""}</div>{(["Staff","Rank","Games","Fun"] as const).map(cat=>{const list=roles.filter(g=>groupCategory(g.name)===cat);return list.length?<div className="chips-profile-role-group" key={cat}><strong>{cat}</strong><div>{list.map(g=><span className="chips-profile-role" key={g.id}>{g.iconId!==0&&<GroupIcon group={g} images={groupIconImages}/>} {g.name}</span>)}</div></div>:null})}<div className="chips-profile-info"><span>Current rank</span><b>{roles.find(g=>groupCategory(g.name)==="Rank")?.name ?? "—"}</b>{style?.xp!==undefined&&<><span>XP</span><b>{style.xp}</b></>}<span>Current channel</span><b>{channels.find(ch=>ch.id===profileClient.channel)?.name ?? "—"}</b></div></section></div>; })()}
     </>
   );
 }
@@ -1992,10 +1993,10 @@ function InfoPanel({
           <span>{t("info.currentChannels")}</span> <span>{totalChannelCount}</span>
         </div>
         <button className="ts-info-connection-link" onClick={onShowServerConnectionInfo}>
-          🔌 {t("connectionInfo.serverTitle")}
+          <UiIcon name="connect" /> {t("connectionInfo.serverTitle")}
         </button>
         <button className="ts-info-connection-link" onClick={onEditServer}>
-          ✏️ {t("serverEdit.title")}
+          <UiIcon name="edit" /> {t("serverEdit.title")}
         </button>
       </div>
     );
@@ -2257,7 +2258,7 @@ function ConnectDialog({
 
   const dialogBody = (
     <div className="ts-dialog ts-connect-dialog" onClick={(e) => e.stopPropagation()}>
-      {!nova && <div className="ts-dialog-titlebar"><span>{t("connect.title")}</span><button onClick={onCancel} aria-label="Close Connect">✕</button></div>}
+      {!nova && <div className="ts-dialog-titlebar"><span>{t("connect.title")}</span><button onClick={onCancel} aria-label="Close Connect"><UiIcon name="close" /></button></div>}
       <div className="ts-dialog-body">
         <div className="ts-dialog-row">
           <label className="ts-dialog-field ts-dialog-field-grow">
@@ -2683,7 +2684,7 @@ function StreamSettingsDialog({
             {t("publish.dialog.title")} <AlphaBadge />
           </span>
           <button onClick={onCancel} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -2696,8 +2697,8 @@ function StreamSettingsDialog({
               value={source}
               onChange={setSource}
               options={[
-                { value: "display", label: `🖥️ ${t("publish.kind.display")}` },
-                { value: "camera", label: `📷 ${t("publish.camera")}` },
+                { value: "display", label: ` ${t("publish.kind.display")}` },
+                { value: "camera", label: ` ${t("publish.camera")}` },
               ]}
             />
           </div>
@@ -2737,9 +2738,9 @@ function StreamSettingsDialog({
               value={accessibility}
               onChange={setAccessibility}
               options={[
-                { value: StreamAccess.PUBLIC, label: `🌐 ${t("publish.privacy.public")}` },
-                { value: StreamAccess.CONTACTS_ONLY, label: `👥 ${t("publish.privacy.contacts")}` },
-                { value: StreamAccess.PRIVATE, label: `🔒 ${t("publish.privacy.private")}` },
+                { value: StreamAccess.PUBLIC, label: ` ${t("publish.privacy.public")}` },
+                { value: StreamAccess.CONTACTS_ONLY, label: ` ${t("publish.privacy.contacts")}` },
+                { value: StreamAccess.PRIVATE, label: ` ${t("publish.privacy.private")}` },
               ]}
             />
           </div>
@@ -2826,10 +2827,10 @@ function StreamSettingsDialog({
                   value={mode}
                   onChange={setMode}
                   options={[
-                    { value: StreamMode.P2P, label: `👥 ${t("publish.mode.p2p")}` },
+                    { value: StreamMode.P2P, label: ` ${t("publish.mode.p2p")}` },
                     {
                       value: StreamMode.SFU,
-                      label: `🖧 ${t("publish.mode.server")}`,
+                      label: ` ${t("publish.mode.server")}`,
                       // The SFU path is a different transport entirely
                       // (requestsfuaccessinfo + mediasoup) and is not built
                       // yet; offering it would announce a stream nobody can
@@ -3011,7 +3012,7 @@ function UpdatePrompt() {
         {t("pwa.reload")}
       </button>
       <button type="button" className="ts-update-toast-dismiss" onClick={snooze}>
-        ✕
+        <UiIcon name="close" />
       </button>
     </div>
   );
@@ -3067,7 +3068,7 @@ function FeedbackFab({ onOpen, stacked }: { onOpen: () => void; stacked: boolean
             }}
             title={t("feedback.dialog.cancel")}
           >
-            ✕
+            <UiIcon name="close" />
           </button>
           {t("feedback.fab.nudge")}
         </div>
@@ -3081,7 +3082,7 @@ function FeedbackFab({ onOpen, stacked }: { onOpen: () => void; stacked: boolean
         }}
         title={t("menu.extras.feedback")}
       >
-        💬
+        <UiIcon name="chat" />
       </button>
     </div>
   );
@@ -3190,7 +3191,7 @@ function NewsTicker() {
           }
         }}
       >
-        ✕
+        <UiIcon name="close" />
       </button>
     </div>
   );
@@ -3207,7 +3208,7 @@ function DonateFab() {
       rel="noopener noreferrer"
       title={t("donate.title")}
     >
-      <span className="ts-donate-fab-icon" aria-hidden="true">☕</span>
+      <span className="ts-donate-fab-icon" aria-hidden="true"><UiIcon name="coffee" /></span>
       {t("donate.label")}
     </a>
   );
@@ -3325,7 +3326,7 @@ function FeedbackDialog({ onClose, audioState }: { onClose: () => void; audioSta
         <div className="ts-dialog-titlebar">
           <span>{t("feedback.dialog.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3514,7 +3515,7 @@ function FavoritesDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("favorites.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-favorites-body">
@@ -3668,7 +3669,7 @@ function CollectedUrlsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("collectedUrls.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3746,7 +3747,7 @@ function InviteFriendDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("inviteFriend.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3841,7 +3842,7 @@ function ClientLogDialog({ entries, onClose }: { entries: ClientLogEntry[]; onCl
         <div className="ts-dialog-titlebar">
           <span>{t("clientLog.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -3929,7 +3930,7 @@ function BanListDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("banList.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4010,7 +4011,7 @@ function ComplainListDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("complainList.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4106,7 +4107,7 @@ function OfflineMessagesDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("offlineMessages.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4232,7 +4233,7 @@ function GroupAssignDialog({
             {kind === "channel" ? t("groupAssign.channelTitle") : t("groupAssign.serverTitle")} - {clientName}
           </span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4252,7 +4253,7 @@ function GroupAssignDialog({
                       className={`ts-menu-item${assigned ? " ts-group-assign-current" : ""}`}
                       onClick={() => onSelect(g.id, assigned)}
                     >
-                      <span className="ts-menu-item-icon">{assigned ? "✔️" : ""}</span>
+                      <span className="ts-menu-item-icon">{assigned ? <UiIcon name="check" /> : ""}</span>
                       {tree.groupIconsInMenus && g.iconId !== 0 && <GroupIcon group={g} images={iconImages} />}
                       <span className="ts-menu-item-label">{g.name}</span>
                       {kind === "server" && assigned && (
@@ -4301,7 +4302,7 @@ function MoveClientDialog({
             {t("moveClient.title")} - {clientName}
           </span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4323,7 +4324,7 @@ function MoveClientDialog({
                       onClick={() => onSelect(ch.id)}
                     >
                       <span className="ts-menu-item-icon">
-                        {current ? "✔️" : spacer.isSpacer ? "➖" : "📁"}
+                        {current ? <UiIcon name="check" /> : spacer.isSpacer ? <UiIcon name="minus" /> : <UiIcon name="folder" />}
                       </span>
                       <span className="ts-menu-item-label">{label}</span>
                       {current && (
@@ -4417,23 +4418,23 @@ function FileBrowserDialog({
             {t("fileBrowser.title")} - {channelName}
           </span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
           <div className="ts-file-browser-toolbar">
             <button onClick={() => onNavigate(ftParentPath(path))} disabled={path === "/"} title={t("fileBrowser.up")}>
-              ⬆ {t("fileBrowser.up")}
+              <UiIcon name="up" /> {t("fileBrowser.up")}
             </button>
             <span className="ts-file-browser-path">{path}</span>
             <button onClick={onRefresh} title={t("fileBrowser.refresh")}>
-              🔄
+              <UiIcon name="refresh" />
             </button>
             <button onClick={() => setCreatingDir(true)} title={t("fileBrowser.newFolder")}>
-              🗀 {t("fileBrowser.newFolder")}
+              <UiIcon name="folder" /> {t("fileBrowser.newFolder")}
             </button>
             <button onClick={() => fileInputRef.current?.click()} title={t("fileBrowser.upload")}>
-              ⬆️ {t("fileBrowser.upload")}
+              <UiIcon name="up" /> {t("fileBrowser.upload")}
             </button>
             <input
               ref={fileInputRef}
@@ -4505,13 +4506,13 @@ function FileBrowserDialog({
                             />
                           </form>
                         ) : entry.isFile ? (
-                          <span>📄 {entry.name}</span>
+                          <span><UiIcon name="file" /> {entry.name}</span>
                         ) : (
                           <button
                             className="ts-link-button"
                             onClick={() => onNavigate(ftJoinPath(path, entry.name))}
                           >
-                            📁 {entry.name}
+                            <UiIcon name="folder" /> {entry.name}
                           </button>
                         )}
                       </td>
@@ -4520,17 +4521,17 @@ function FileBrowserDialog({
                       <td className="ts-file-browser-actions">
                         {entry.isFile && (
                           <button onClick={() => onDownload(entry)} title={t("fileBrowser.download")}>
-                            ⬇
+                            <UiIcon name="down" />
                           </button>
                         )}
                         <button
                           onClick={() => setRenaming({ entry, value: entry.name })}
                           title={t("fileBrowser.rename")}
                         >
-                          ✏
+                          <UiIcon name="edit" />
                         </button>
                         <button onClick={() => onDelete(entry)} title={t("fileBrowser.delete")}>
-                          🗑
+                          <UiIcon name="trash" />
                         </button>
                       </td>
                     </tr>
@@ -4759,7 +4760,7 @@ function ServerIconsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("serverIcons.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -4771,7 +4772,7 @@ function ServerIconsDialog({
               }}
               title={t("serverIcons.upload")}
             >
-              ⬆️ {t("serverIcons.upload")}
+              <UiIcon name="up" /> {t("serverIcons.upload")}
             </button>
             <input
               ref={fileInputRef}
@@ -4830,7 +4831,7 @@ function ServerIconsDialog({
                     )}
                     <span>{entry.name.replace("icon_", "#")}</span>
                     <button onClick={() => onDelete(entry)} title={t("fileBrowser.delete")}>
-                      🗑
+                      <UiIcon name="trash" />
                     </button>
                   </div>
                 );
@@ -4978,7 +4979,7 @@ function PermissionsEditorDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("permsEditor.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-perms-editor-tabs">
@@ -5175,8 +5176,8 @@ function PermissionsEditorDialog({
                             <tr key={`${entry.name}-${i}`} title={entry.description || undefined}>
                               <td>{entry.name}</td>
                               <td>{entry.value}</td>
-                              {showNegated && <td>{entry.negated ? "✔️" : ""}</td>}
-                              {showSkip && <td>{entry.skip ? "✔️" : ""}</td>}
+                              {showNegated && <td>{entry.negated ? <UiIcon name="check" /> : ""}</td>}
+                              {showSkip && <td>{entry.skip ? <UiIcon name="check" /> : ""}</td>}
                               <td>
                                 {catalogEntry && (
                                   <button
@@ -5186,7 +5187,7 @@ function PermissionsEditorDialog({
                                     }}
                                     title={t("fileBrowser.delete")}
                                   >
-                                    🗑
+                                    <UiIcon name="trash" />
                                   </button>
                                 )}
                               </td>
@@ -5240,7 +5241,7 @@ function PermissionOverviewDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("permissionOverview.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5273,8 +5274,8 @@ function PermissionOverviewDialog({
                       <tr key={`${e.name}-${i}`} title={e.description || undefined}>
                         <td>{e.name}</td>
                         <td>{e.value}</td>
-                        <td>{e.negated ? "✔️" : ""}</td>
-                        <td>{e.skip ? "✔️" : ""}</td>
+                        <td>{e.negated ? <UiIcon name="check" /> : ""}</td>
+                        <td>{e.skip ? <UiIcon name="check" /> : ""}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5320,7 +5321,7 @@ function ServerProtocolLogDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("serverProtocolLog.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5370,7 +5371,7 @@ function WhisperHistoryDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("whisperHistory.title", { server: serverName })}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5432,7 +5433,7 @@ function WhisperListsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("whisperLists.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5505,7 +5506,7 @@ function ClientConnectionInfoDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("connectionInfo.clientTitle", { name: clientName })}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5577,7 +5578,7 @@ function ServerConnectionInfoDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("connectionInfo.serverTitle")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -5723,7 +5724,7 @@ function IdentitiesDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("identities.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body ts-identities-body">
@@ -5739,7 +5740,7 @@ function IdentitiesDialog({
                     onClick={() => setSelectedId(identity.id)}
                     title={identity.id === activeId ? t("identities.isDefault") : undefined}
                   >
-                    {identity.id === activeId ? "★ " : ""}
+                    {identity.id === activeId ? <UiIcon name="star" /> : ""}
                     {identity.name}
                   </button>
                 </li>
@@ -5894,7 +5895,7 @@ function ContactsDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("contacts.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-contacts-body">
@@ -5922,7 +5923,7 @@ function ContactsDialog({
                   <button type="button" className="ts-plain-button" aria-current={c.uid === selectedUid}>
                     {onlineClients.some((cl) => cl.uid === c.uid) && <span className="ts-contacts-online-dot" />}
                     {displayName(c)}
-                    {c.ignored && " 🚫"}
+                    {c.ignored && <UiIcon name="ban" />}
                   </button>
                 </li>
               ))}
@@ -6037,7 +6038,7 @@ function AwayDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("away.dialog.title")}</span>
           <button onClick={onCancel} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-dialog-body">
@@ -6083,12 +6084,12 @@ function AwayDialog({
 }
 
 const OPTIONS_SECTIONS = [
-  { id: "connection", icon: "🌐", label: "Connection" },
-  { id: "audio", icon: "🎧", label: "Audio" },
-  { id: "hotkeys", icon: "⌨", label: "Hotkeys" },
-  { id: "sounds", icon: "🔔", label: "Notifications & sounds" },
-  { id: "design", icon: "◐", label: "Appearance" },
-  { id: "profile", icon: "👤", label: "Profile" },
+  { id: "connection", icon: "globe", label: "Connection" },
+  { id: "audio", icon: "headphones", label: "Audio" },
+  { id: "hotkeys", icon: "keyboard", label: "Hotkeys" },
+  { id: "sounds", icon: "bell", label: "Notifications & sounds" },
+  { id: "design", icon: "palette", label: "Appearance" },
+  { id: "profile", icon: "user", label: "Profile" },
 ] as const;
 
 interface AudioSettings {
@@ -7134,7 +7135,7 @@ function ChatPanel() {
               aria-label={t("chatSettings.fontReset")}
               onClick={() => set({ fontFamily: "", fontSize: 0 })}
             >
-              ↻
+              <UiIcon name="refresh" />
             </button>
           </div>
           <div
@@ -7409,7 +7410,7 @@ function MeldungenPanel({
               />
               {script && (
                 <button title={t("sounds.test")} onClick={() => void runSoundScript(script, settings.pack)}>
-                  ▶
+                  <UiIcon name="play" />
                 </button>
               )}
             </span>
@@ -7454,7 +7455,7 @@ function MeldungenPanel({
         <td style={indent} colSpan={3}>
           <span className="ts-notify-action">
             <button className="ts-notify-twisty" onClick={toggle}>
-              {expanded ? "▾" : "▸"}
+              {expanded ? <UiIcon name="minus" /> : <UiIcon name="play" />}
             </button>
             {!special && (
               <input
@@ -7490,10 +7491,10 @@ function MeldungenPanel({
               if (window.confirm(t("notify.applyToFavoritesConfirm"))) onApplyPackToFavorites();
             }}
           >
-            ✔
+            <UiIcon name="check" />
           </button>
           <button title={t("notify.importPack")} onClick={() => fileRef.current?.click()}>
-            📂
+            <UiIcon name="folder" />
           </button>
           {pack && (
             <button
@@ -7504,7 +7505,7 @@ function MeldungenPanel({
                 save({ ...settings, pack: BUILTIN_PACK });
               }}
             >
-              🗑
+              <UiIcon name="trash" />
             </button>
           )}
           <input
@@ -8149,7 +8150,7 @@ function DesignStorePanel({
                       onClick={() => handleRate(theme.id, star)}
                       title={t("design.store.rating.rate", { stars: String(star) })}
                     >
-                      {star <= Math.round(theme.rating.average) ? "★" : "☆"}
+                      {star <= Math.round(theme.rating.average) ? <UiIcon name="star" /> : <UiIcon name="star" />}
                     </button>
                   ))}
                   <span className="ts-design-theme-card-rating-count">
@@ -8549,7 +8550,7 @@ function OptionsDialog({
             title={t("dialog.close")}
             aria-label={t("dialog.close")}
           >
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-options-body">
@@ -8560,7 +8561,7 @@ function OptionsDialog({
                 className={`ts-options-sidebar-item${s.id === active.id ? " ts-options-sidebar-item-active" : ""}`}
                 onClick={() => onSectionChange(s.id)}
               >
-                <span className="ts-options-sidebar-icon">{s.icon}</span>
+                <span className="ts-options-sidebar-icon"><UiIcon name={s.icon} /></span>
                 <span>{s.label}</span>
               </button>
             ))}
@@ -8688,7 +8689,7 @@ function ServerEditDialog({
         <div className="ts-dialog-titlebar">
           <span>{t("serverEdit.title")}</span>
           <button onClick={onClose} title={t("dialog.close")} aria-label={t("dialog.close")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
         <div className="ts-options-body">
@@ -12777,7 +12778,7 @@ function AppInner() {
             WebSpeak3 project
           </a>
           <button className="ts-demo-mobile-toggle" onClick={() => setDemoForceMobile((v) => !v)}>
-            {demoForceMobile ? "🖥 Desktop view" : "📱 Mobile view"}
+            {demoForceMobile ? " Desktop view" : " Mobile view"}
           </button>
         </div>
       )}
@@ -12790,7 +12791,7 @@ function AppInner() {
             aria-label={t("menu.connections")}
             aria-expanded={novaMenuOpen}
           >
-            ☰
+            <UiIcon name="menu" />
           </button>
         )}
         <div
@@ -12817,7 +12818,7 @@ function AppInner() {
                   setConnectionsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🟢</span>
+                <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.connect")}</span>
                 <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+S</span>
               </button>
@@ -12829,7 +12830,7 @@ function AppInner() {
                   setConnectionsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔴</span>
+                <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.disconnectCurrent")}</span>
                 <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+D</span>
               </button>
@@ -12841,7 +12842,7 @@ function AppInner() {
                   setConnectionsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">❌</span>
+                <span className="ts-menu-item-icon"><UiIcon name="close" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.disconnectAll")}</span>
               </button>
             </div>
@@ -12871,7 +12872,7 @@ function AppInner() {
                     setFavoritesMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">🔖</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="bookmark" /></span>
                   <span className="ts-menu-item-label">{f.bookmarkName}</span>
                 </button>
               ))}
@@ -12899,7 +12900,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">💤</span>
+                <span className="ts-menu-item-icon"><UiIcon name="away" /></span>
                 <span className="ts-menu-item-label">{t("menu.self.setAway")}</span>
               </button>
               <button
@@ -12910,7 +12911,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">{micOn ? "🔇" : "🎤"}</span>
+                <span className="ts-menu-item-icon">{micOn ? <UiIcon name="mic-off" /> : <UiIcon name="mic" />}</span>
                 <span className="ts-menu-item-label">
                   {micOn ? t("menu.self.disableMic") : t("menu.self.enableMic")}
                 </span>
@@ -12923,7 +12924,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">{outputMuted ? "🔊" : "🔇"}</span>
+                <span className="ts-menu-item-icon">{outputMuted ? <UiIcon name="volume" /> : <UiIcon name="volume-off" />}</span>
                 <span className="ts-menu-item-label">
                   {outputMuted ? t("menu.self.unmuteOutput") : t("menu.self.muteOutput")}
                 </span>
@@ -12939,7 +12940,7 @@ function AppInner() {
                   setSelfMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">ℹ️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="info" /></span>
                 <span className="ts-menu-item-label">{t("menu.self.connectionInfo")}</span>
               </button>
             </div>
@@ -12963,7 +12964,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🏷️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="group" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.serverGroups")}</span>
               </button>
               <button
@@ -12973,7 +12974,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🎖️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="badge" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.channelGroups")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -12984,7 +12985,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔐</span>
+                <span className="ts-menu-item-icon"><UiIcon name="lock" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.serverPermissions")}</span>
               </button>
               <button
@@ -12994,11 +12995,11 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔑</span>
+                <span className="ts-menu-item-icon"><UiIcon name="key" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.channelPermissions")}</span>
               </button>
               <button className="ts-menu-item" disabled title={t("clientContext.notSupported")}>
-                <span className="ts-menu-item-icon">📖</span>
+                <span className="ts-menu-item-icon"><UiIcon name="book" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.overview")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13009,7 +13010,7 @@ function AppInner() {
                   setRightsMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🙋</span>
+                <span className="ts-menu-item-icon"><UiIcon name="hand" /></span>
                 <span className="ts-menu-item-label">{t("menu.rights.myRights")}</span>
               </button>
             </div>
@@ -13034,7 +13035,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📇</span>
+                <span className="ts-menu-item-icon"><UiIcon name="users" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.contacts")}</span>
               </button>
               <button
@@ -13044,7 +13045,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔗</span>
+                <span className="ts-menu-item-icon"><UiIcon name="link" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.collectedUrls")}</span>
               </button>
               <button
@@ -13055,7 +13056,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🧑‍🤝‍🧑</span>
+                <span className="ts-menu-item-icon"><UiIcon name="users" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.inviteFriend")}</span>
               </button>
               <button
@@ -13065,7 +13066,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">⇅</span>
+                <span className="ts-menu-item-icon"><UiIcon name="arrow" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.fileTransfers")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13077,7 +13078,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🕓</span>
+                <span className="ts-menu-item-icon"><UiIcon name="clock" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.whisperHistory")}</span>
               </button>
               <button
@@ -13087,7 +13088,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📜</span>
+                <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.clientLog")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13098,7 +13099,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🚫</span>
+                <span className="ts-menu-item-icon"><UiIcon name="ban" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.banList")}</span>
               </button>
               <button
@@ -13108,7 +13109,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">⚠️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="warning" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.complaintList")}</span>
               </button>
               <button
@@ -13118,7 +13119,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📧</span>
+                <span className="ts-menu-item-icon"><UiIcon name="mail" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.offlineMessages")}</span>
               </button>
               <button
@@ -13130,7 +13131,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔑</span>
+                <span className="ts-menu-item-icon"><UiIcon name="key" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.serverQueryLogin")}</span>
               </button>
               <button
@@ -13140,7 +13141,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">📄</span>
+                <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.serverLog")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13152,11 +13153,11 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">🔴</span>
+                <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.startRecording")}</span>
               </button>
               <button className="ts-menu-item" disabled>
-                <span className="ts-menu-item-icon">🔴</span>
+                <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.startMultitrackRecording")}</span>
               </button>
               <button
@@ -13167,7 +13168,7 @@ function AppInner() {
                   setExtrasMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">⏹️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="stop" /></span>
                 <span className="ts-menu-item-label">{t("menu.extras.stopRecording")}</span>
               </button>
               <div className="ts-menu-separator" />
@@ -13182,7 +13183,7 @@ function AppInner() {
             className="ts-menubar-item ts-plain-button"
             onClick={() => setFeedbackOpen(true)}
           >
-            💬 {t("menu.extras.feedback")}
+            <UiIcon name="chat" /> {t("menu.extras.feedback")}
           </button>
         )}
         <div className="ts-menubar-dropdown" ref={helpMenuRef}>
@@ -13203,7 +13204,7 @@ function AppInner() {
                   setHelpMenuOpen(false);
                 }}
               >
-                <span className="ts-menu-item-icon">ℹ️</span>
+                <span className="ts-menu-item-icon"><UiIcon name="info" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.about")}</span>
               </button>
               <a
@@ -13211,7 +13212,7 @@ function AppInner() {
                 {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}
                 onClick={() => setHelpMenuOpen(false)}
               >
-                <span className="ts-menu-item-icon">🐙</span>
+                <span className="ts-menu-item-icon"><UiIcon name="code" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.github")}</span>
               </a>
               <a
@@ -13219,7 +13220,7 @@ function AppInner() {
                 {...externalLinkProps("https://github.com/WebSpeak3/webspeak3/releases")}
                 onClick={() => setHelpMenuOpen(false)}
               >
-                <span className="ts-menu-item-icon">📋</span>
+                <span className="ts-menu-item-icon"><UiIcon name="copy" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.changelog")}</span>
               </a>
               <a
@@ -13227,7 +13228,7 @@ function AppInner() {
                 {...externalLinkProps("https://hosted.weblate.org/projects/webspeak3/")}
                 onClick={() => setHelpMenuOpen(false)}
               >
-                <span className="ts-menu-item-icon">🌐</span>
+                <span className="ts-menu-item-icon"><UiIcon name="globe" /></span>
                 <span className="ts-menu-item-label">{t("menu.help.translate")}</span>
               </a>
               {IS_OWN_HOSTED_INSTANCE && (
@@ -13239,7 +13240,7 @@ function AppInner() {
                     setHelpMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">📜</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
                   <span className="ts-menu-item-label">{t("menu.extras.tos")}</span>
                 </button>
               )}
@@ -13283,7 +13284,7 @@ function AppInner() {
               title={isAway ? t("toolbar.backOnline") : t("toolbar.setAway")}
               aria-label={isAway ? t("toolbar.backOnline") : t("toolbar.setAway")}
             >
-              💤
+              <UiIcon name="away" />
             </button>
             <button
               className="ts-icon-caret"
@@ -13297,7 +13298,7 @@ function AppInner() {
               aria-haspopup="menu"
               aria-expanded={awayMenuOpen}
             >
-              ▾
+              <UiIcon name="minus" />
             </button>
             {awayMenuOpen && (
               <div className="ts-menu ts-menu-away" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
@@ -13308,7 +13309,7 @@ function AppInner() {
                     setAwayMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">💤</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="away" /></span>
                   <span className="ts-menu-item-label">{t("away.setGlobal")}</span>
                 </button>
                 <button
@@ -13319,7 +13320,7 @@ function AppInner() {
                     setAwayMenuOpen(false);
                   }}
                 >
-                  <span className="ts-menu-item-icon">✎</span>
+                  <span className="ts-menu-item-icon"><UiIcon name="edit" /></span>
                   <span className="ts-menu-item-label">{t("away.setGlobalStatus")}</span>
                 </button>
                 {awayPresets.length > 0 && <div className="ts-menu-separator" />}
@@ -13349,7 +13350,7 @@ function AppInner() {
               aria-haspopup="menu"
               aria-expanded={whisperMenuOpen}
             >
-              🤫
+              <UiIcon name="mic" />
             </button>
             {whisperMenuOpen && (
               <div className="ts-menu ts-menu-away" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
@@ -13370,7 +13371,7 @@ function AppInner() {
                     <div className="ts-context-menu-title">{t("whisper.clients")}</div>
                     {[...whisperClientIds].map((id) => (
                       <button key={id} className="ts-menu-item" onClick={() => toggleWhisperClient(id)}>
-                        <span className="ts-menu-item-icon">✕</span>
+                        <span className="ts-menu-item-icon"><UiIcon name="close" /></span>
                         <span className="ts-menu-item-label">
                           {clients.find((c) => c.id === id)?.name ?? id}
                         </span>
@@ -13396,7 +13397,7 @@ function AppInner() {
             title={micLabel}
             aria-label={micLabel}
           >
-            {micOn && !inputMuted ? "🎤" : "🔇"}
+            {micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}
           </button>
           {pushToTalk ? (
             <button
@@ -13421,7 +13422,7 @@ function AppInner() {
               aria-label={t("toolbar.pushToTalk")}
               aria-pressed={pttPressed}
             >
-              🗣️
+              <UiIcon name="mic" />
             </button>
           ) : null}
           <button
@@ -13434,7 +13435,7 @@ function AppInner() {
             title={streamLabel}
             aria-label={streamLabel}
           >
-            {publishState === "live" ? "🛑" : "🖥️"}
+            {publishState === "live" ? <UiIcon name="stop" /> : <UiIcon name="screen" />}
           </button>
           {TAB_AUDIO_SUPPORTED && (
             <button
@@ -13444,7 +13445,7 @@ function AppInner() {
               title={tabAudioOn ? t("tabAudio.stop") : t("tabAudio.start")}
               aria-label={tabAudioOn ? t("tabAudio.stop") : t("tabAudio.start")}
             >
-              🎵
+              <UiIcon name="music" />
             </button>
           )}
           <span className="ts-toolbar-sep" />
@@ -13455,11 +13456,11 @@ function AppInner() {
             title={outputMuted ? t("toolbar.unmuteSound") : t("toolbar.muteSound")}
             aria-label={outputMuted ? t("toolbar.unmuteSound") : t("toolbar.muteSound")}
           >
-            {outputMuted ? "🔇" : "🔊"}
+            {outputMuted ? <UiIcon name="volume-off" /> : <UiIcon name="volume" />}
           </button>
           {recording && (
             <button className="ts-icon-button ts-recording-on" onClick={stopRecording} title={t("menu.extras.stopRecording")} aria-label={t("menu.extras.stopRecording")}>
-              🔴
+              <UiIcon name="record" />
             </button>
           )}
           <span className="ts-toolbar-sep" />
@@ -14120,9 +14121,9 @@ function AppInner() {
 
       {connectError && (
         <div className="ts-connect-error">
-          <span>⚠️ {connectError}</span>
+          <span><UiIcon name="warning" /> {connectError}</span>
           <button onClick={() => setConnectError(null)} title={t("connectError.dismiss")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
       )}
@@ -14130,7 +14131,7 @@ function AppInner() {
       {changeNicknameOpen && (
         <div className="ts-poke-compose-backdrop" {...nicknameBackdrop}>
           <div className="ts-poke-compose" onClick={(e) => e.stopPropagation()}>
-            <span>✎ {t("menu.self.changeNickname")}</span>
+            <span><UiIcon name="edit" /> {t("menu.self.changeNickname")}</span>
             <input
               autoFocus
               value={nicknameDraft}
@@ -14160,7 +14161,7 @@ function AppInner() {
       {serverQueryLoginOpen && (
         <div className="ts-poke-compose-backdrop" {...serverQueryLoginBackdrop}>
           <div className="ts-poke-compose ts-serverquery-login-compose" onClick={(e) => e.stopPropagation()}>
-            <span>🔑 {t("menu.extras.serverQueryLogin")}</span>
+            <span><UiIcon name="key" /> {t("menu.extras.serverQueryLogin")}</span>
             <input
               autoFocus
               placeholder={t("serverQueryLogin.username")}
@@ -14195,7 +14196,7 @@ function AppInner() {
         <div className="ts-poke-compose-backdrop" {...pokeBackdrop}>
           <div className="ts-poke-compose" onClick={(e) => e.stopPropagation()}>
             <span>
-              👉 {t("poke.title")} <strong>{pokeTarget.name}</strong>
+              <UiIcon name="hand" /> {t("poke.title")} <strong>{pokeTarget.name}</strong>
             </span>
             <input
               autoFocus
@@ -14217,7 +14218,7 @@ function AppInner() {
         <div className="ts-poke-compose-backdrop" {...kickBackdrop}>
           <div className="ts-poke-compose" onClick={(e) => e.stopPropagation()}>
             <span>
-              👢 {t("kick.title")} <strong>{kickTarget.name}</strong>
+              <UiIcon name="logout" /> {t("kick.title")} <strong>{kickTarget.name}</strong>
             </span>
             <input
               autoFocus
@@ -14239,7 +14240,7 @@ function AppInner() {
         <div className="ts-poke-compose-backdrop" {...banBackdrop}>
           <div className="ts-poke-compose ts-ban-compose" onClick={(e) => e.stopPropagation()}>
             <span>
-              🚫 {t("ban.title")} <strong>{banTarget.name}</strong>
+              <UiIcon name="ban" /> {t("ban.title")} <strong>{banTarget.name}</strong>
             </span>
             <label className="ts-ban-duration-field">
               {t("ban.duration")}
@@ -14268,10 +14269,10 @@ function AppInner() {
       {pokes.map((poke) => (
         <div key={poke.id} className="ts-poke-notice">
           <span>
-            👉 <strong>{poke.from}</strong> {t("poke.pokedYou")}{poke.message ? `: ${poke.message}` : ""}
+            <UiIcon name="hand" /> <strong>{poke.from}</strong> {t("poke.pokedYou")}{poke.message ? `: ${poke.message}` : ""}
           </span>
           <button onClick={() => setPokes((prev) => prev.filter((p) => p.id !== poke.id))} title={t("poke.dismiss")}>
-            ✕
+            <UiIcon name="close" />
           </button>
         </div>
       ))}
@@ -14289,7 +14290,7 @@ function AppInner() {
         <div className="ts-stream-panel ts-stream-panel-publish">
           <div className="ts-stream-panel-header">
             <span className="ts-stream-panel-title">
-              🖥️ {t("publish.title")} <AlphaBadge />
+              <UiIcon name="screen" /> {t("publish.title")} <AlphaBadge />
             </span>
             <span className="ts-stream-panel-state">
               {publishState === "live"
@@ -14301,7 +14302,7 @@ function AppInner() {
               onClick={handleStopPublishing}
               title={t("publish.stop")}
             >
-              ✕
+              <UiIcon name="close" />
             </button>
           </div>
           {/* muted: this is our own capture playing back locally */}
@@ -14337,7 +14338,7 @@ function AppInner() {
         <div className="ts-stream-panel">
           <div className="ts-stream-panel-header">
             <span className="ts-stream-panel-title">
-              📺 {watchedStream.name || t("stream.untitled")} <AlphaBadge />
+              <UiIcon name="screen" /> {watchedStream.name || t("stream.untitled")} <AlphaBadge />
             </span>
             <span className="ts-stream-panel-state">
               {streamState === "connected" ? t("stream.live") : t(`stream.state.${streamState}`)}
@@ -14347,7 +14348,7 @@ function AppInner() {
               onClick={handleStopWatchingStream}
               title={t("stream.stop")}
             >
-              ✕
+              <UiIcon name="close" />
             </button>
           </div>
           {/* muted so autoplay is never blocked; the user unmutes via the controls */}
@@ -14373,7 +14374,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">💬</span>
+            <span className="ts-menu-item-icon"><UiIcon name="chat" /></span>
             <span className="ts-menu-item-label">{t("clientContext.privateChat")}</span>
           </button>
           <button
@@ -14384,7 +14385,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">👉</span>
+            <span className="ts-menu-item-icon"><UiIcon name="hand" /></span>
             <span className="ts-menu-item-label">{t("clientContext.poke")}</span>
           </button>
           {!clientContextMenu.isSelf &&
@@ -14395,7 +14396,7 @@ function AppInner() {
               const percent = Math.round((clientVolumes[uid] ?? 1) * 100);
               return (
                 <label className="ts-menu-item ts-menu-volume" title={t("clientContext.volumeHint")}>
-                  <span className="ts-menu-item-icon">{percent === 0 ? "🔇" : "🔉"}</span>
+                  <span className="ts-menu-item-icon">{percent === 0 ? <UiIcon name="volume-off" /> : <UiIcon name="volume" />}</span>
                   <input
                     type="range"
                     min={0}
@@ -14431,7 +14432,7 @@ function AppInner() {
                 setClientContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">📺</span>
+              <span className="ts-menu-item-icon"><UiIcon name="screen" /></span>
               <span className="ts-menu-item-label">{t("clientContext.watchStream")}</span>
             </button>
           )}
@@ -14443,7 +14444,7 @@ function AppInner() {
                 setClientContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">🚚</span>
+              <span className="ts-menu-item-icon"><UiIcon name="arrow" /></span>
               <span className="ts-menu-item-label">{t("clientContext.moveTo")}</span>
             </button>
           )}
@@ -14454,7 +14455,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📋</span>
+            <span className="ts-menu-item-icon"><UiIcon name="copy" /></span>
             <span className="ts-menu-item-label">{t("clientContext.copyName")}</span>
           </button>
           <button
@@ -14464,7 +14465,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🔌</span>
+            <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
             <span className="ts-menu-item-label">{t("clientContext.connectionInfo")}</span>
           </button>
           {!clientContextMenu.isSelf && (
@@ -14475,7 +14476,7 @@ function AppInner() {
                 setClientContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">🤫</span>
+              <span className="ts-menu-item-icon"><UiIcon name="mic" /></span>
               <span className="ts-menu-item-label">
                 {whisperClientIds.has(clientContextMenu.clientId)
                   ? t("clientContext.removeWhisperTarget")
@@ -14491,7 +14492,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🏷️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="group" /></span>
             <span className="ts-menu-item-label">{t("clientContext.assignChannelGroup")}</span>
           </button>
           <button
@@ -14501,7 +14502,7 @@ function AppInner() {
               setClientContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🎖️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="badge" /></span>
             <span className="ts-menu-item-label">{t("clientContext.assignServerGroup")}</span>
           </button>
           {!clientContextMenu.isSelf && (
@@ -14519,7 +14520,7 @@ function AppInner() {
                   setClientContextMenu(null);
                 }}
               >
-                <span className="ts-menu-item-icon">🚪</span>
+                <span className="ts-menu-item-icon"><UiIcon name="logout" /></span>
                 <span className="ts-menu-item-label">{t("clientContext.kickChannel")}</span>
               </button>
               <button
@@ -14534,7 +14535,7 @@ function AppInner() {
                   setClientContextMenu(null);
                 }}
               >
-                <span className="ts-menu-item-icon">👢</span>
+                <span className="ts-menu-item-icon"><UiIcon name="logout" /></span>
                 <span className="ts-menu-item-label">{t("clientContext.kick")}</span>
               </button>
               <button
@@ -14546,7 +14547,7 @@ function AppInner() {
                   setClientContextMenu(null);
                 }}
               >
-                <span className="ts-menu-item-icon">🚫</span>
+                <span className="ts-menu-item-icon"><UiIcon name="ban" /></span>
                 <span className="ts-menu-item-label">{t("clientContext.ban")}</span>
               </button>
             </>
@@ -14569,7 +14570,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🔌</span>
+            <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
             <span className="ts-menu-item-label">{t("serverContext.connectionInfo")}</span>
           </button>
           <button
@@ -14579,7 +14580,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">✏️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="edit" /></span>
             <span className="ts-menu-item-label">{t("serverEdit.title")}</span>
           </button>
           <button
@@ -14589,7 +14590,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📋</span>
+            <span className="ts-menu-item-icon"><UiIcon name="copy" /></span>
             <span className="ts-menu-item-label">{t("serverContext.copyAddress")}</span>
           </button>
           <button
@@ -14599,7 +14600,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">⭐</span>
+            <span className="ts-menu-item-icon"><UiIcon name="star" /></span>
             <span className="ts-menu-item-label">{t("serverContext.addFavorite")}</span>
           </button>
           <div className="ts-menu-separator" />
@@ -14610,7 +14611,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🖼️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="image" /></span>
             <span className="ts-menu-item-label">{t("serverContext.icons")}</span>
           </button>
           <button
@@ -14620,7 +14621,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📜</span>
+            <span className="ts-menu-item-icon"><UiIcon name="file" /></span>
             <span className="ts-menu-item-label">{t("menu.extras.serverLog")}</span>
           </button>
           <button
@@ -14630,7 +14631,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">🚫</span>
+            <span className="ts-menu-item-icon"><UiIcon name="ban" /></span>
             <span className="ts-menu-item-label">{t("menu.extras.banList")}</span>
           </button>
           <button
@@ -14640,7 +14641,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">⚠️</span>
+            <span className="ts-menu-item-icon"><UiIcon name="warning" /></span>
             <span className="ts-menu-item-label">{t("menu.extras.complaintList")}</span>
           </button>
           <div className="ts-menu-separator" />
@@ -14651,7 +14652,7 @@ function AppInner() {
               setServerContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">❌</span>
+            <span className="ts-menu-item-icon"><UiIcon name="close" /></span>
             <span className="ts-menu-item-label">{t("serverContext.disconnect")}</span>
           </button>
         </div>
@@ -14678,7 +14679,7 @@ function AppInner() {
                 setChannelContextMenu(null);
               }}
             >
-              <span className="ts-menu-item-icon">➡️</span>
+              <span className="ts-menu-item-icon"><UiIcon name="arrow" /></span>
               <span className="ts-menu-item-label">{t("channelContext.join")}</span>
             </button>
           )}
@@ -14689,7 +14690,7 @@ function AppInner() {
               setChannelContextMenu(null);
             }}
           >
-            <span className="ts-menu-item-icon">📁</span>
+            <span className="ts-menu-item-icon"><UiIcon name="folder" /></span>
             <span className="ts-menu-item-label">{t("channelContext.files")}</span>
           </button>
         </div>
@@ -14904,7 +14905,7 @@ function AppInner() {
                     handleClosePrivateChat(thread.partnerId);
                   }}
                 >
-                  ×
+                  <UiIcon name="close" />
                 </span>
               </button>
             ))}
@@ -14957,9 +14958,9 @@ function AppInner() {
       <div className="chips-self-bar" data-lg>
         <span className="chips-self-avatar">{profileStyle.avatarImage ? <img src={profileStyle.avatarImage} alt="Your avatar"/> : ownClient ? <AvatarTile client={ownClient} images={serverIconImages} className="ts-client-avatar" isSelf/> : (nickname || "?").slice(0,1).toUpperCase()}</span>
         <span className="chips-self-label">{ownClient?.name || nickname || "Not connected"}</span>
-        <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? "🎙" : "🔇"}</button>
-        <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}>🎧</button>
-        <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings">⚙</button>
+        <button onClick={() => void handleToggleMic()} disabled={!connected} aria-label="Toggle mute" aria-pressed={!micOn || inputMuted}>{micOn && !inputMuted ? <UiIcon name="mic" /> : <UiIcon name="mic-off" />}</button>
+        <button onClick={handleToggleDeafen} disabled={!connected} aria-label="Toggle deafen" aria-pressed={outputMuted}><UiIcon name="headphones" /></button>
+        <button onClick={() => setOptionsDialogOpen(true)} aria-label="Open settings" title="Settings"><UiIcon name="settings" /></button>
       </div>
       <NewsTicker />
       {iconPackStyle && <style>{iconPackStyle}</style>}

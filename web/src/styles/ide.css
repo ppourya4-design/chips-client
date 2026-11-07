@@ -648,7 +648,7 @@
 }
 
 .ts-app.ts-design-ide .ts-chat-input-row::before {
-  content: "➜ ~/channel";
+  content: "> ~/channel";
   flex-shrink: 0;
   font-weight: 600;
   font-size: 12px;

@@ -748,7 +748,9 @@
 }
 
 .ts-app.ts-design-nova .ts-chat-input-row button::before {
-  content: "➤";
+  content: "";
+  background: var(--bg-toolbar-1);
+  mask: url("../public/send.svg") center / 18px 18px no-repeat;
   position: absolute;
   inset: 0;
   display: flex;
@@ -1262,7 +1264,9 @@
 }
 
 .ts-app.ts-design-pulse .ts-chat-input-row button::before {
-  content: "➤";
+  content: "";
+  background: var(--bg-toolbar-1);
+  mask: url("../public/send.svg") center / 18px 18px no-repeat;
   position: absolute;
   inset: 0;
   display: flex;
@@ -5011,3 +5015,5 @@ input.ts-identities-uid {
 .chips-profile-editor { max-height:85vh; width:min(680px, 94vw); overflow:auto; }
 
 .chips-self-avatar :is(img, .ts-client-avatar) { width:32px; height:32px; border-radius:50%; object-fit:cover; }
+
+.chips-ui-icon { display:inline-block; width:1.1em; height:1.1em; flex-shrink:0; vertical-align:-0.15em; pointer-events:none; }
