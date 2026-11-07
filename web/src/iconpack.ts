@@ -79,7 +79,7 @@ function toDataUrl(data: Uint8Array, mime: string): string {
  *  Returns null when nothing in it matches a known icon. */
 export async function parseIconPack(file: File): Promise<IconPack | null> {
   const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), {
-    filter: (entry) => (entry.name.split(".").pop()?.toLowerCase() ?? "") in MIME_BY_EXTENSION,
+    filter: (entry) => entry.name.split(".").pop()?.toLowerCase() === "svg",
   });
   const byStem = new Map<string, { data: Uint8Array; ext: string }>();
   for (const [path, data] of Object.entries(entries)) {
@@ -107,6 +107,7 @@ export async function parseIconPack(file: File): Promise<IconPack | null> {
 export function iconPackCss(pack: IconPack | undefined): string {
   if (!pack) return "";
   return Object.entries(pack.icons)
+    .filter(([,url]) => url?.startsWith("data:image/svg+xml;"))
     .map(
       ([id, url]) => `.ts-app [data-pack-icon="${id}"] {
   background: url("${url}") center / contain no-repeat !important;

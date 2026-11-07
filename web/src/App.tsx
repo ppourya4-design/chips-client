@@ -1,3 +1,5 @@
+import { BROADCAST_KEY, loadBroadcastPreferences } from "./broadcastPreferences";
+import { captureBinding, loadBinding, loadShortcuts, matchesBinding, sameBinding, SHORTCUTS_KEY, type KeyBinding as PttBinding, } from "./hotkeys";
 import { UiIcon } from "./UiIcon";
 import { loadActionBinding, loadGlassIntensity } from "./settings";
 import {
@@ -144,6 +146,8 @@ import {
   encodeWavStereo,
   listAudioInputDevices,
   listAudioOutputDevices,
+  hasNativeOutputPicker,
+  pickAudioOutputDevice,
 } from "./voice";
 import { createAec3, type Aec3Instance } from "./aec3";
 import { isTauri } from "@tauri-apps/api/core";
@@ -656,23 +660,7 @@ function loadBoolPref(key: string, fallback: boolean): boolean {
   return raw === null ? fallback : raw === "1";
 }
 
-interface PttBinding {
-  code: string;
-  label: string;
-}
-
-function loadPttBinding(): PttBinding | null {
-  try {
-    const v = JSON.parse(localStorage.getItem(PTT_BINDING_KEY) ?? "null");
-    return v && typeof v.code === "string" && typeof v.label === "string" ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-function keyBindingLabel(e: KeyboardEvent): string {
-  return e.key.length === 1 && e.key !== " " ? e.key.toUpperCase() : e.code;
-}
+function loadPttBinding(): PttBinding | null { return loadBinding(PTT_BINDING_KEY); }
 
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -2635,27 +2623,34 @@ function SegmentedChoice<T extends string | number>({
 
 function StreamSettingsDialog({
   ownName,
+  canStart,
   onStart,
   onCancel,
 }: {
   ownName: string;
+  canStart: boolean;
   onStart: (options: StreamPublishOptions) => void;
   onCancel: () => void;
 }) {
   const t = useT();
   const backdrop = useBackdropDismiss(onCancel);
-  const [preset, setPreset] = useState<string | null>("720");
-  const [source, setSource] = useState<"display" | "camera">("display");
-  const [audio, setAudio] = useState(true);
-  const [accessibility, setAccessibility] = useState<number>(StreamAccess.PUBLIC);
+  const [saved] = useState(loadBroadcastPreferences);
+  const [preset, setPreset] = useState<string | null>(null);
+  const [source, setSource] = useState<"display" | "camera">(saved.source);
+  const [audio, setAudio] = useState(saved.audio);
+  const [accessibility, setAccessibility] = useState<number>(saved.accessibility);
   const [advanced, setAdvanced] = useState(false);
-  const [height, setHeight] = useState(STREAM_PRESETS["720"]!.height);
-  const [fps, setFps] = useState(STREAM_PRESETS["720"]!.fps);
-  const [videoBitrateKbps, setVideoBitrateKbps] = useState(STREAM_PRESETS["720"]!.videoBitrateKbps);
-  const [audioBitrateKbps, setAudioBitrateKbps] = useState(128);
-  const [viewerLimit, setViewerLimit] = useState(0);
-  const [mode, setMode] = useState<number>(StreamMode.P2P);
-  const [contentHint, setContentHint] = useState<"motion" | "detail">("motion");
+  const [height, setHeight] = useState(saved.height);
+  const [fps, setFps] = useState(saved.fps);
+  const [videoBitrateKbps, setVideoBitrateKbps] = useState(saved.videoBitrateKbps);
+  const [audioBitrateKbps, setAudioBitrateKbps] = useState(saved.audioBitrateKbps);
+  const [viewerLimit, setViewerLimit] = useState(saved.viewerLimit);
+  const mode = StreamMode.P2P;
+  const [contentHint, setContentHint] = useState<"motion" | "detail">(saved.contentHint);
+
+  useEffect(() => {
+    localStorage.setItem(BROADCAST_KEY, JSON.stringify({ source, audio, accessibility, height, fps, videoBitrateKbps, audioBitrateKbps, viewerLimit, contentHint }));
+  }, [source,audio,accessibility,height,fps,videoBitrateKbps,audioBitrateKbps,viewerLimit,contentHint]);
 
   const applyPreset = (key: string) => {
     const p = STREAM_PRESETS[key];
@@ -2716,7 +2711,7 @@ function StreamSettingsDialog({
             />
           </div>
 
-          <div className="ts-stream-settings-row">
+          {source === "display" && (<div className="ts-stream-settings-row">
             <span>{t("publish.audio")}</span>
             <label
               className="ts-stream-settings-toggle"
@@ -2730,7 +2725,7 @@ function StreamSettingsDialog({
               />
               <span />
             </label>
-          </div>
+          </div>)}
 
           <div className="ts-stream-settings-row">
             <span>{t("publish.privacy")}</span>
@@ -2823,23 +2818,7 @@ function StreamSettingsDialog({
 
               <div className="ts-stream-settings-row">
                 <span>{t("publish.mode")}</span>
-                <SegmentedChoice
-                  value={mode}
-                  onChange={setMode}
-                  options={[
-                    { value: StreamMode.P2P, label: ` ${t("publish.mode.p2p")}` },
-                    {
-                      value: StreamMode.SFU,
-                      label: ` ${t("publish.mode.server")}`,
-                      // The SFU path is a different transport entirely
-                      // (requestsfuaccessinfo + mediasoup) and is not built
-                      // yet; offering it would announce a stream nobody can
-                      // watch.
-                      disabled: true,
-                      title: t("publish.mode.serverUnavailable"),
-                    },
-                  ]}
-                />
+                <p>P2P. Server-relayed/SFU broadcasting is not implemented.</p>
               </div>
             </>
           )}
@@ -2847,11 +2826,12 @@ function StreamSettingsDialog({
         <div className="ts-dialog-buttons">
           <div className="ts-dialog-buttons-right">
             <button type="button" onClick={onCancel}>
-              {t("publish.dialog.cancel")}
+              Save and return
             </button>
             <button
               type="button"
               className="ts-stream-settings-go"
+              disabled={!canStart}
               onClick={() =>
                 onStart({
                   name: `${ownName} - ${t(source === "camera" ? "publish.camera" : "publish.screen")}`,
@@ -5953,14 +5933,7 @@ function ContactsDialog({
                 </label>
               ))}
             </div>
-            <label className="ts-dialog-field">
-              {t("contacts.phoneticName")}
-              <input
-                disabled={!selected}
-                value={selected?.phoneticName ?? ""}
-                onChange={(e) => updateSelected({ phoneticName: e.target.value })}
-              />
-            </label>
+
             <label className="ts-dialog-field">
               {t("contacts.whisperSetting")}
               <select
@@ -6097,6 +6070,8 @@ interface AudioSettings {
   outputDeviceId: string;
   onOutputDeviceChange: (id: string, label?: string) => void;
   onRefreshOutputDevices: () => void;
+  onPickOutputDevice: () => void;
+  onEnableCapture: () => void;
   playbackVolume: number;
   onPlaybackVolumeChange: (v: number) => void;
   autoVolume: boolean;
@@ -6125,7 +6100,7 @@ interface AudioSettings {
   typingAttenuation: boolean;
   onTypingAttenuationChange: (on: boolean) => void;
   pttBinding: PttBinding | null;
-  onPttBindingChange: (binding: PttBinding) => void;
+  onPttBindingChange: (binding: PttBinding | null) => void;
   noiseSuppressionEnabled: boolean;
   onToggleNoiseSuppression: () => void;
   echoCancellationEnabled: boolean;
@@ -6152,7 +6127,8 @@ function PttKeyButton({ binding, onChange, keyboardOnly = false }: { binding: Pt
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Tab") return setListening(false);
-      take(e, e.key === "Escape" ? undefined : { code: e.code, label: keyBindingLabel(e) });
+      if (/^(Control|Shift|Alt|Meta)(Left|Right)$/.test(e.code)) { e.preventDefault(); return; }
+      take(e, e.key === "Escape" ? undefined : captureBinding(e));
     };
     const onMouse = (e: MouseEvent) => {
       // Left click is how you started (and how you click away), so it can't be PTT.
@@ -6162,9 +6138,14 @@ function PttKeyButton({ binding, onChange, keyboardOnly = false }: { binding: Pt
       // The back/forward side buttons navigate on release; keep the page.
       window.addEventListener("mouseup", (up) => up.preventDefault(), { capture: true, once: true });
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (/^(Control|Shift|Alt|Meta)(Left|Right)$/.test(e.code)) take(e, captureBinding(e));
+    };
+    window.addEventListener("keyup", onKeyUp, true);
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousedown", onMouse, true);
     return () => {
+      window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("mousedown", onMouse, true);
     };
@@ -6190,32 +6171,11 @@ function HotkeysPanel({ audio }: { audio: AudioSettings }) {
         </label>
         <div className="ts-options-field-row">
           {t("recording.pttKey")}
-          <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} />
+          <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} /><button onClick={() => audio.onPttBindingChange(null)}>Clear push-to-talk</button>
         </div>
         <p className="ts-options-hint">{t("recording.pttHint")}</p>
       </fieldset>
-      <fieldset className="ts-options-fieldset">
-        <legend>{t("hotkeys.shortcuts")}</legend>
-        <table className="ts-hotkeys-table">
-          <tbody>
-            {(
-              [
-                ["Ctrl + S", "menu.connections.connect"],
-                ["Ctrl + D", "menu.connections.disconnectCurrent"],
-                ["Ctrl + B", "menu.favorites.add"],
-              ] as const
-            ).map(([keys, label]) => (
-              <tr key={keys}>
-                <td>
-                  <kbd>{keys}</kbd>
-                </td>
-                <td>{t(label)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="ts-options-hint">{t("hotkeys.shortcutsHint")}</p>
-      </fieldset>
+      <p>Bindings work while Chips is focused. Capture a key, modifier chord, or a bare modifier on release. Escape cancels; Tab leaves capture. PTT also supports middle/side mouse buttons. Every action can be cleared.</p>
     </>
   );
 }
@@ -6292,6 +6252,7 @@ function WiedergabePanel({ audio }: { audio: AudioSettings }) {
               {volumeDb} dB
             </span>
           </div>
+          {hasNativeOutputPicker() && <button onClick={audio.onPickOutputDevice}>Choose output device with system picker</button>}
           <button onClick={audio.onPlayTestTone}>{t("playback.playTestTone")}</button>
           <fieldset className="ts-options-fieldset">
             <legend>{t("playback.options")}</legend>
@@ -6316,9 +6277,11 @@ function WiedergabePanel({ audio }: { audio: AudioSettings }) {
 
 function AufnahmePanel({ audio }: { audio: AudioSettings }) {
   const t = useT();
+  const supported = navigator.mediaDevices?.getSupportedConstraints() ?? {};
   return (
     <>
       <h3>{t("recording.title")}</h3>
+      {!audio.micOn && <button onClick={audio.onEnableCapture}>Enable microphone for setup and testing</button>}
       <p className="ts-options-subtitle">{t("recording.subtitle")}</p>
       <div className="ts-options-columns">
         <ul className="ts-options-profile-list">
@@ -6355,7 +6318,7 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
               <>
                 <div className="ts-options-field-row">
                   {t("recording.pttKey")}
-                  <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} />
+                  <PttKeyButton binding={audio.pttBinding} onChange={audio.onPttBindingChange} /><button onClick={() => audio.onPttBindingChange(null)}>Clear push-to-talk</button>
                 </div>
                 <p className="ts-options-hint">{t("recording.pttHint")}</p>
               </>
@@ -6417,6 +6380,7 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
           </fieldset>
           <fieldset className="ts-options-fieldset">
             <legend>{t("recording.dsp")}</legend>
+            <p>Native echo cancellation, noise suppression and automatic gain control use WebView2 getUserMedia processing. Unsupported runtime constraints are hidden. AEC3 is the bundled WebRTC WASM echo canceller; it replaces native echo cancellation. Typing attenuation and VAD run locally in Chips.</p>
             <div className="ts-options-dsp-grid">
               <label className="ts-options-checkbox">
                 <input
@@ -6426,7 +6390,7 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
                 />
                 {t("recording.typingAttenuation")}
               </label>
-              <label className="ts-options-checkbox">
+              {supported.echoCancellation && (<label className="ts-options-checkbox">
                 <input
                   type="checkbox"
                   checked={audio.echoCancellationEnabled}
@@ -6434,23 +6398,23 @@ function AufnahmePanel({ audio }: { audio: AudioSettings }) {
                   onChange={audio.onToggleEchoCancellation}
                 />
                 {t("recording.echoCancellation")}
-              </label>
-              <label className="ts-options-checkbox">
+              </label>)}
+              {supported.noiseSuppression && (<label className="ts-options-checkbox">
                 <input
                   type="checkbox"
                   checked={audio.noiseSuppressionEnabled}
                   onChange={audio.onToggleNoiseSuppression}
                 />
                 {t("recording.noiseSuppression")}
-              </label>
-              <label className="ts-options-checkbox">
+              </label>)}
+              {supported.autoGainControl && (<label className="ts-options-checkbox">
                 <input
                   type="checkbox"
                   checked={audio.autoGainControlEnabled}
                   onChange={audio.onToggleAutoGainControl}
                 />
                 {t("recording.autoGainControl")}
-              </label>
+              </label>)}
               <label className="ts-options-checkbox">
                 <input
                   type="checkbox"
@@ -7561,6 +7525,22 @@ function MeldungenPanel({
   );
 }
 
+/** The existing icon-pack storage/parser, reachable without the deferred theme manager. */
+function IconPackPanel() {
+  const prefs = useContext(DisplayPrefsContext);
+  const [error, setError] = useState("");
+  return <fieldset className="ts-options-fieldset"><legend>Vector icon packs</legend>
+    <p>Import matching TeamSpeak SVG icons in a .ts3_iconpack or ZIP. Raster-only packs are not accepted under the vector-icon policy.</p>
+    <label className="ts-dialog-field">Import SVG icon pack<input type="file" accept=".ts3_iconpack,.zip" onChange={async e=>{
+      const file=e.target.files?.[0];e.target.value="";if(!file)return;
+      try { const pack=await parseIconPack(file); if(!pack){setError("No matching SVG icons found.");return;} prefs.saveIconPacks([...prefs.iconPacks,pack]);prefs.setIconPackId(pack.id);setError(""); }
+      catch { setError("Could not read this icon pack."); }
+    }}/></label>
+    {error && <p role="alert">{error}</p>}
+    {prefs.iconPacks.map(pack=><div className="ts-options-field-row" key={pack.id}><span>{pack.name}</span><button onClick={()=>{prefs.saveIconPacks(prefs.iconPacks.filter(p=>p.id!==pack.id));if(prefs.iconPackId===pack.id)prefs.setIconPackId("");}}>Delete {pack.name}</button></div>)}
+  </fieldset>;
+}
+
 function DesignPanel({
   designSelection,
   onSelectionChange,
@@ -8572,6 +8552,7 @@ function OptionsDialog({
                 <WiedergabePanel audio={audio} />
                 <AufnahmePanel audio={audio} />
                 <WhisperPanel onOpenWhisperLists={onOpenWhisperLists} />
+                {hubPanels.audio}
               </>
             ) : active.id === "hotkeys" ? (
               <>
@@ -9155,6 +9136,7 @@ function AppInner() {
   const [typingAttenuation, setTypingAttenuation] = useState(() => loadBoolPref(TYPING_ATTENUATION_KEY, false));
   const typingAttenuationRef = useRef(typingAttenuation);
   const [pttBinding, setPttBinding] = useState<PttBinding | null>(loadPttBinding);
+  const [shortcutBindings, setShortcutBindings] = useState(loadShortcuts);
   const [pttPressed, setPttPressed] = useState(false);
   // Read when a new MicCapture is created, which happens outside render.
   const pushToTalkRef = useRef(pushToTalk);
@@ -9433,6 +9415,7 @@ function AppInner() {
 
   useEffect(() => {
     if (pttBinding) localStorage.setItem(PTT_BINDING_KEY, JSON.stringify(pttBinding));
+    else localStorage.removeItem(PTT_BINDING_KEY);
   }, [pttBinding]);
 
   // Browsers only deliver keys while this tab has focus - there's no global
@@ -9440,14 +9423,14 @@ function AppInner() {
   useEffect(() => {
     if (!pushToTalk || !pttBinding) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code !== pttBinding.code || e.defaultPrevented) return;
+      if (!matchesBinding(pttBinding, e) || e.defaultPrevented) return;
       // A letter key still has to type in chat; F-keys or modifiers work anywhere.
       if (e.key.length === 1 && isTypingTarget(e.target)) return;
       if (!isTypingTarget(e.target)) e.preventDefault();
       setPttPressed(true);
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === pttBinding.code) setPttPressed(false);
+      if (e.code === pttBinding.code || /^(Control|Shift|Alt|Meta)(Left|Right)$/.test(e.code)) setPttPressed(false);
     };
     // preventDefault: no middle-click autoscroll, no back/forward navigation
     // from the side buttons (which fires on release).
@@ -11348,17 +11331,17 @@ function AppInner() {
   // registered once yet always sees current state.
   const shortcutHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
   shortcutHandlerRef.current = (e: KeyboardEvent) => {
-    if (!e.ctrlKey) return;
+    if (e.defaultPrevented || e.repeat || document.querySelector("[role=dialog]")) return;
     // Typing in a field (chat, dialogs) must never trigger e.g. Ctrl+D.
     const el = e.target as HTMLElement | null;
     if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-    if (e.key.toLowerCase() === "s" && !connecting) {
+    if (matchesBinding(shortcutBindings.connect, e) && !connecting) {
       e.preventDefault();
       setConnectDialogOpen(true);
-    } else if (e.key.toLowerCase() === "d" && (connected || sessionTabs.length > 0)) {
+    } else if (matchesBinding(shortcutBindings.disconnect, e) && (connected || sessionTabs.length > 0)) {
       e.preventDefault();
       handleDisconnect();
-    } else if (e.key.toLowerCase() === "b") {
+    } else if (matchesBinding(shortcutBindings.preset, e)) {
       e.preventDefault();
       openAddFavorite();
     }
@@ -12073,6 +12056,7 @@ function AppInner() {
       handleStopPublishing();
       return;
     }
+    setOptionsSection("audio"); setOptionsDialogOpen(true);
     setStreamSettingsOpen(true);
   };
 
@@ -12714,14 +12698,15 @@ function AppInner() {
         e.repeat ||
         optionsDialogOpen ||
         profileEditorOpen ||
+        document.querySelector("[role=dialog]") ||
         (e.target instanceof HTMLElement &&
           e.target.closest("input,textarea,select,[contenteditable=true]"))
       )
         return;
-      if (e.code === muteBinding?.code) {
+      if (matchesBinding(muteBinding, e)) {
         e.preventDefault();
         void handleToggleMic();
-      } else if (e.code === deafenBinding?.code) {
+      } else if (matchesBinding(deafenBinding, e)) {
         e.preventDefault();
         handleToggleDeafen();
       }
@@ -12729,6 +12714,22 @@ function AppInner() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   });
+
+  const allActionBindings = { ...shortcutBindings, mute: muteBinding, deafen: deafenBinding, ptt: pttBinding };
+  const changeActionBinding = (action: keyof typeof allActionBindings, next: PttBinding | null) => {
+    if (next && Object.entries(allActionBindings).some(([id,b]) => id !== action && sameBinding(b,next))) {
+      alert("Choose a different key: this binding is already assigned to another action."); return;
+    }
+    if (action === "ptt") setPttBinding(next);
+    else if (action === "mute" || action === "deafen") {
+      (action === "mute" ? setMuteBinding : setDeafenBinding)(next);
+      const key = `chips:${action}-binding`;
+      if (next) localStorage.setItem(key, JSON.stringify(next)); else localStorage.removeItem(key);
+    } else {
+      const updated = { ...shortcutBindings, [action]: next };
+      setShortcutBindings(updated); localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(updated));
+    }
+  };
 
   const syncProfileToken = (description: string) => {
     const token = encodeStyleToken(profileStyle);
@@ -12820,7 +12821,7 @@ function AppInner() {
               >
                 <span className="ts-menu-item-icon"><UiIcon name="connect" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.connect")}</span>
-                <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+S</span>
+                <span className="ts-menu-item-shortcut">{shortcutBindings.connect?.label ?? ""}</span>
               </button>
               <button
                 className="ts-menu-item"
@@ -12832,7 +12833,7 @@ function AppInner() {
               >
                 <span className="ts-menu-item-icon"><UiIcon name="record" /></span>
                 <span className="ts-menu-item-label">{t("menu.connections.disconnectCurrent")}</span>
-                <span className="ts-menu-item-shortcut">{t("shortcut.ctrl")}+D</span>
+                <span className="ts-menu-item-shortcut">{shortcutBindings.disconnect?.label ?? ""}</span>
               </button>
               <button
                 className="ts-menu-item"
@@ -13028,16 +13029,7 @@ function AppInner() {
           {extrasMenuOpen && (
             <div className="ts-menu" ref={focusFirstItem} onKeyDown={handleMenuKeyDown}>
 
-              <button
-                className="ts-menu-item"
-                onClick={() => {
-                  setContactsOpen(true);
-                  setExtrasMenuOpen(false);
-                }}
-              >
-                <span className="ts-menu-item-icon"><UiIcon name="users" /></span>
-                <span className="ts-menu-item-label">{t("menu.extras.contacts")}</span>
-              </button>
+
               <button
                 className="ts-menu-item"
                 onClick={() => {
@@ -13464,7 +13456,7 @@ function AppInner() {
             </button>
           )}
           <span className="ts-toolbar-sep" />
-          <img src={`${import.meta.env.BASE_URL}chips-mark.png`} alt="" className="ts-app-logo" />
+          <img src={`${import.meta.env.BASE_URL}chips-mark.svg`} alt="" className="ts-app-logo" />
           <span className="ts-app-title" role="heading" aria-level={1}>Chips</span>
         </div>
 
@@ -13809,13 +13801,14 @@ function AppInner() {
       )}
 
       {profileEditorOpen && <ProfileStyleEditor value={profileStyle} onChange={updateProfile} onClose={() => setProfileEditorOpen(false)} />}
-      {optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && !changeNicknameOpen && (
+      {optionsDialogOpen && !profileEditorOpen && !identitiesOpen && !whisperListsOpen && !favoritesDialogMode && !changeNicknameOpen && !contactsOpen && !streamSettingsOpen && (
         <OptionsDialog
           hubPanels={{
             connection: (
               <>
                 <h3>Connection</h3>
                 <button onClick={openManageFavorites}>Manage server presets</button>
+                <button onClick={()=>setContactsOpen(true)}>Contacts and per-contact whisper policy</button>
                 <button onClick={openAddFavorite}>Save server preset</button>
                 <button
                   disabled={!connected}
@@ -13907,60 +13900,14 @@ function AppInner() {
                 <KontoPanel />
               </>
             ),
-            hotkeys: (
-              <fieldset className="ts-options-fieldset">
-                <legend>Mute & deafen</legend>
-                <p>
-                  While Chips is focused. Escape cancels recording. Use keyboard bindings.
-                </p>
-                <label>
-                  Mute{" "}
-                  <PttKeyButton
-                    keyboardOnly
-                    binding={muteBinding}
-                    onChange={(b) => {
-                      if (b.code === deafenBinding?.code || b.code === pttBinding?.code) {
-                        alert("Choose a different key: this key is already bound.");
-                        return;
-                      }
-                      setMuteBinding(b);
-                      localStorage.setItem("chips:mute-binding", JSON.stringify(b));
-                    }}
-                  />
-                </label>
-                <button
-                  onClick={() => {
-                    setMuteBinding(null);
-                    localStorage.removeItem("chips:mute-binding");
-                  }}
-                >
-                  Clear mute
-                </button>
-                <label>
-                  Deafen{" "}
-                  <PttKeyButton
-                    keyboardOnly
-                    binding={deafenBinding}
-                    onChange={(b) => {
-                      if (b.code === muteBinding?.code || b.code === pttBinding?.code) {
-                        alert("Choose a different key: this key is already bound.");
-                        return;
-                      }
-                      setDeafenBinding(b);
-                      localStorage.setItem("chips:deafen-binding", JSON.stringify(b));
-                    }}
-                  />
-                </label>
-                <button
-                  onClick={() => {
-                    setDeafenBinding(null);
-                    localStorage.removeItem("chips:deafen-binding");
-                  }}
-                >
-                  Clear deafen
-                </button>
-              </fieldset>
-            ),
+            audio: <><fieldset className="ts-options-fieldset"><legend>Per-speaker volume</legend>
+              {gatewayFeatures.has("clientVolume") ? clients.filter(c=>c.id!==ownClientId && c.uid).map(c=><label className="ts-dialog-field" key={c.uid}>{c.name}<input aria-label={`Volume for ${c.name}`} type="range" min="0" max="2" step="0.05" value={clientVolumes[c.uid] ?? 1} onChange={e=>setClientVolumes(prev=>({...prev,[c.uid]:Number(e.target.value)}))}/><span>{Math.round((clientVolumes[c.uid]??1)*100)}%</span><button onClick={()=>setClientVolumes(prev=>{const next={...prev};delete next[c.uid];return next;})}>Reset {c.name}</button></label>) : <p>Available after connecting to a connector exposing per-speaker mixing.</p>}
+              {!clients.length && <p>Connect to edit speaker volumes. Saved volumes follow each client UID.</p>}
+              {Object.keys(clientVolumes).length>0 && <button onClick={()=>setClientVolumes({})}>Reset all saved speaker volumes</button>}
+            </fieldset><fieldset className="ts-options-fieldset"><legend>Broadcast defaults</legend><p>Existing TS6 P2P screen/camera settings. Opening setup does not capture or publish. Go live requires a connection and explicit confirmation.</p><button onClick={()=>setStreamSettingsOpen(true)}>Configure broadcast defaults</button></fieldset></>,
+            hotkeys: <fieldset className="ts-options-fieldset"><legend>Action bindings</legend>
+              {([ ["mute","Mute"], ["deafen","Deafen"], ["connect","Open Connect"], ["disconnect","Disconnect current session"], ["preset","Save server preset"] ] as const).map(([id,label]) => <div className="ts-options-field-row" key={id}><span>{label}</span><PttKeyButton keyboardOnly binding={allActionBindings[id]} onChange={b=>changeActionBinding(id,b)}/><button onClick={()=>changeActionBinding(id,null)}>Clear {label.toLowerCase()}</button></div>)}
+            </fieldset>,
             sounds: (
               <p>
                 Desktop notifications are not available in this build; in-app
@@ -14000,6 +13947,7 @@ function AppInner() {
                   Dark appearance
                 </label>
                 )}
+                <IconPackPanel />
                 <h4>Accent</h4>
                 <AccentSwitcher accent={accent} onChange={handleAccentChange} />
                 {designTheme === "glass" && !activeCustomTheme && (
@@ -14074,6 +14022,8 @@ function AppInner() {
             outputDeviceId,
             onOutputDeviceChange: handleOutputDeviceChange,
             onRefreshOutputDevices: refreshOutputDevices,
+            onEnableCapture: () => void handleToggleMic(),
+            onPickOutputDevice: () => { void pickAudioOutputDevice().then(device=>{if(device)void handleOutputDeviceChange(device.deviceId);}).catch(error=>appendLog({kind:"error",text:`Output device error: ${String(error)}`})); },
             playbackVolume,
             onPlaybackVolumeChange: setPlaybackVolume,
             autoVolume,
@@ -14102,10 +14052,7 @@ function AppInner() {
             onTypingAttenuationChange: setTypingAttenuation,
             onPushToTalkChange: setPushToTalk,
             pttBinding,
-            onPttBindingChange: b => {
-              if (b.code === muteBinding?.code || b.code === deafenBinding?.code) { alert("Choose a different key: this key is already bound."); return; }
-              setPttBinding(b);
-            },
+            onPttBindingChange: b => changeActionBinding("ptt",b),
             noiseSuppressionEnabled,
             onToggleNoiseSuppression: handleToggleNoiseSuppression,
             echoCancellationEnabled,
@@ -14279,6 +14226,7 @@ function AppInner() {
 
       {streamSettingsOpen && (
         <StreamSettingsDialog
+          canStart={connected && ownClientId !== null && !DEMO_MODE}
           ownName={ownClient?.name ?? "Chips"}
           onStart={handleStartPublishing}
           onCancel={() => setStreamSettingsOpen(false)}
@@ -14388,42 +14336,8 @@ function AppInner() {
             <span className="ts-menu-item-icon"><UiIcon name="hand" /></span>
             <span className="ts-menu-item-label">{t("clientContext.poke")}</span>
           </button>
-          {!clientContextMenu.isSelf &&
-            gatewayFeatures.has("clientVolume") &&
-            (() => {
-              const uid = clients.find((c) => c.id === clientContextMenu.clientId)?.uid;
-              if (!uid) return null;
-              const percent = Math.round((clientVolumes[uid] ?? 1) * 100);
-              return (
-                <label className="ts-menu-item ts-menu-volume" title={t("clientContext.volumeHint")}>
-                  <span className="ts-menu-item-icon">{percent === 0 ? <UiIcon name="volume-off" /> : <UiIcon name="volume" />}</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={200}
-                    step={5}
-                    value={percent}
-                    aria-label={t("clientContext.volume")}
-                    onChange={(e) => {
-                      const volume = Number(e.target.value) / 100;
-                      setClientVolumes((prev) => {
-                        const next = { ...prev };
-                        if (volume === 1) delete next[uid];
-                        else next[uid] = volume;
-                        return next;
-                      });
-                    }}
-                    onDoubleClick={() =>
-                      setClientVolumes((prev) => {
-                        const { [uid]: _, ...rest } = prev;
-                        return rest;
-                      })
-                    }
-                  />
-                  <span className="ts-menu-volume-value">{percent}%</span>
-                </label>
-              );
-            })()}
+          {!clientContextMenu.isSelf && gatewayFeatures.has("clientVolume") && <button className="ts-menu-item" onClick={()=>{setClientContextMenu(null);setOptionsSection("audio");setOptionsDialogOpen(true);}}><UiIcon name="volume"/> Open speaker volume settings</button>}
+
           {!clientContextMenu.isSelf && streamInfos[clientContextMenu.clientId] && (
             <button
               className="ts-menu-item"

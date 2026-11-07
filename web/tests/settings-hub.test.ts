@@ -25,7 +25,7 @@ test("mute and deafen bindings survive reload and clear independently", () => {
   assert.equal(loadActionBinding(HUB_KEYS.mute), null);
   for (const [key, code] of [[HUB_KEYS.mute, "F8"], [HUB_KEYS.deafen, "Enter"]]) {
     localStorage.setItem(key, JSON.stringify({ code, label: code }));
-    assert.deepEqual(loadActionBinding(key), { code, label: code });
+    assert.deepEqual(loadActionBinding(key), { code, label: code, ctrl:false, alt:false, shift:false, meta:false });
   }
   stored.delete(HUB_KEYS.mute);
   assert.equal(loadActionBinding(HUB_KEYS.mute), null);
@@ -83,4 +83,26 @@ test("deafen uses the existing mute commands and restores the previous input sta
 test("layout-specific appearance controls are hidden where they would do nothing", () => {
   assert.match(app, /designTheme === "standard" && !activeCustomTheme/);
   assert.match(app, /designTheme === "glass" && !activeCustomTheme/);
+});
+
+
+test("comprehensive settings retain real device, speaker, contact, broadcast and icon-pack controls", () => {
+  assert.match(app, /hasNativeOutputPicker\(\) && <button onClick=\{audio.onPickOutputDevice\}/);
+  assert.match(app, /onEnableCapture/);
+  assert.match(app, /hubPanels.audio/);
+  assert.match(app, /legend>Per-speaker volume/);
+  assert.match(app, /Configure broadcast defaults/);
+  assert.match(app, /Contacts and per-contact whisper policy/);
+  assert.match(app, /<IconPackPanel/);
+  assert.match(app, /!contactsOpen && !streamSettingsOpen/);
+});
+
+test("all bindable actions share conflicts and PTT clearing updates persistent storage", () => {
+  assert.match(app, /allActionBindings = \{ \.\.\.shortcutBindings, mute: muteBinding, deafen: deafenBinding, ptt: pttBinding \}/);
+  assert.match(app, /sameBinding\(b,next\)/);
+  assert.match(app, /else localStorage.removeItem\(PTT_BINDING_KEY\)/);
+  assert.match(app, /Clear push-to-talk/);
+  assert.match(app, /matchesBinding\(shortcutBindings.connect, e\)/);
+  assert.match(app, /matchesBinding\(shortcutBindings.disconnect, e\)/);
+  assert.match(app, /matchesBinding\(shortcutBindings.preset, e\)/);
 });
