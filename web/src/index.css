@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 }
 
 * {
@@ -10,22 +10,65 @@ html,
 body {
   margin: 0;
   height: 100%;
+  background: #05050a;
 }
 
 body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
+  color: #eef1f7;
+  /* The app owns its own scrolling panes; the page itself never bounces. */
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
   height: 100vh;
 }
 
-/* Chips interim safety baseline: no animated movement or glowing shadows.
-   Later design steps can replace this with explicitly approved light-only effects. */
-*, *::before, *::after {
+/* ---------------------------------------------------------------------------
+   Chips motion + light policy (Step 2 baseline — no Step 3 animation system).
+
+   In Step 1 this block was a blanket `animation: none; box-shadow: none;
+   filter: none` on every element, which would also kill the Liquid Glass
+   specular edges. It is now scoped to what the rules actually forbid:
+
+     - No letter motion, ever. There is no keyframe animation in the Chips
+       design; the only motion is the 140ms colour/opacity/1px-translate
+       transition on pointer states in styles/liquid-glass.css.
+     - No glow. Blurred coloured halos, neon bloom and glowing shadows are
+       refused; the permitted light in this step is the crisp 1px specular
+       inset edge of the glass. Upstream's legacy designs (Standard/Nova/
+       Pulse/IDE) keep their flat Step 1 look and stay opt-in.
+     - No element `filter:` on the legacy designs (as in Step 1). The glass
+       design needs `backdrop-filter`, which is a separate property and is
+       therefore untouched by the filter rule; no `filter:` is used on it
+       either.
+   ------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  /* Letter motion is banned outright, not just pending a later step. */
   animation: none !important;
+  /* No text glow, ever. */
   text-shadow: none !important;
+}
+
+/* Legacy (non-glass) designs: the flat Step 1 baseline, unchanged. */
+.ts-app:not(.ts-design-glass),
+.ts-app:not(.ts-design-glass) *,
+.ts-app:not(.ts-design-glass) *::before,
+.ts-app:not(.ts-design-glass) *::after {
   box-shadow: none !important;
   filter: none !important;
+}
+
+/* Glass: drop shadows are allowed only as depth below a panel or the crisp
+   specular inset edge. The glowing variants the hard rules ban are never
+   authored — see the comment block on the material in liquid-glass.css. */
+.ts-app.ts-design-glass ::selection {
+  background: rgba(116, 229, 255, 0.28);
+  color: #f4f8ff;
 }

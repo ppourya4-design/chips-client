@@ -15,6 +15,9 @@ import { useRegisterSW } from "virtual:pwa-register/react";
 import "./App.css";
 // After App.css: its :where() base variables have the same (zero) specificity.
 import "./styles/ide.css";
+// The default design. Last, so its :where() variables and .ts-design-glass
+// component rules sit on top of the stock sheet without !important.
+import "./styles/liquid-glass.css";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -139,6 +142,14 @@ import {
 } from "./publish";
 import { DEFAULT_ICE_SERVERS, StreamViewer, parseStreamInfo, type StreamEvent, type StreamInfo } from "./stream";
 import { DEMO_HOST, DEMO_MODE, DemoSocket } from "./demoMode";
+import {
+  ACCENT_THEMES,
+  accentVariables,
+  loadAccent,
+  saveAccent,
+  type AccentId,
+} from "./theme";
+import { installLiquidGlass } from "./liquidGlass";
 import {
   DEFAULT_SYNC_SERVER,
   SYNC_CATEGORIES,
@@ -506,7 +517,9 @@ const DESIGN_THEME_KEY = "webspeak3:design-theme";
 const DESIGN_SELECTION_KEY = "webspeak3:design-selection";
 const CUSTOM_THEMES_KEY = "webspeak3:custom-themes";
 
-type DesignTheme = "standard" | "nova" | "pulse" | "ide";
+/** "glass" is the Chips Liquid Glass design and the default; the others are
+ *  upstream's layouts, kept selectable in Options -> Design. */
+type DesignTheme = "glass" | "standard" | "nova" | "pulse" | "ide";
 
 /** A user-authored theme package: a name, which built-in layout it behaves like
  *  (Standard's plain chrome, Nova's collapsed menu/splash, Pulse's card/sidebar
@@ -547,26 +560,31 @@ const STORE_SCREENSHOT_MAX_DATA_URL_LENGTH = 400_000;
 
 function isDesignTheme(value: string): value is DesignTheme {
   return (
-    value === "standard" || value === "nova" || value === "pulse" || value === "ide"
+    value === "glass" ||
+    value === "standard" ||
+    value === "nova" ||
+    value === "pulse" ||
+    value === "ide"
   );
 }
 
 function loadDesignTheme(): DesignTheme {
   const raw = localStorage.getItem(DESIGN_THEME_KEY);
   if (raw && isDesignTheme(raw)) return raw;
-  return "standard";
+  return "glass";
 }
 
 function resolveDesignThemeBase(selection: string, customThemes: CustomTheme[]): DesignTheme {
   if (selection.startsWith("custom:")) {
     // A removed base (e.g. the old GreenTeaSpeak theme) falls back to Standard.
     const base = customThemes.find((th) => `custom:${th.id}` === selection)?.baseTheme;
-    return base && isDesignTheme(base) ? base : "standard";
+    return base && isDesignTheme(base) ? base : "glass";
   }
-  return isDesignTheme(selection) ? selection : "standard";
+  return isDesignTheme(selection) ? selection : "glass";
 }
 
 function designThemeClassName(theme: DesignTheme): string {
+  if (theme === "glass") return " ts-design-glass";
   if (theme === "nova") return " ts-design-nova";
   if (theme === "pulse") return " ts-design-pulse";
   if (theme === "ide") return " ts-design-ide";
@@ -574,6 +592,7 @@ function designThemeClassName(theme: DesignTheme): string {
 }
 
 function designThemeLabel(theme: DesignTheme, t: (key: string) => string): string {
+  if (theme === "glass") return t("design.theme.glass");
   if (theme === "nova") return t("design.theme.nova");
   if (theme === "pulse") return t("design.theme.pulse");
   if (theme === "ide") return t("design.theme.ide");
@@ -605,7 +624,7 @@ function saveCustomThemes(list: CustomTheme[]) {
 
 function loadDesignSelection(): string {
   const raw = localStorage.getItem(DESIGN_SELECTION_KEY);
-  // A removed builtin (e.g. "greenteaspeak") falls back to Standard.
+  // A removed builtin (e.g. "greenteaspeak") falls back to Liquid Glass.
   return raw && (raw.startsWith("custom:") || isDesignTheme(raw)) ? raw : loadDesignTheme();
 }
 
@@ -6764,6 +6783,36 @@ type CustomThemeDraft = { id: string | null; name: string; baseTheme: DesignThem
  *  four icons (edit/duplicate/export/delete) render at the same size and
  *  color - mixing text glyphs with an emoji (as before) made them look
  *  inconsistent across fonts/platforms. */
+/** Compact floating accent switcher: four pill swatches in the toolbar. The
+ *  swatch colour is the accent itself, which is fine — an accent *dot* is not a
+ *  glow; the hard rule bans blurred halos, and the glass edge stays crisp. */
+function AccentSwitcher({
+  accent,
+  onChange,
+}: {
+  accent: AccentId;
+  onChange: (next: AccentId) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="ts-accent-switcher" role="radiogroup" aria-label={t("accent.label")}>
+      {ACCENT_THEMES.map((theme) => (
+        <button
+          key={theme.id}
+          type="button"
+          role="radio"
+          aria-checked={theme.id === accent}
+          className={`ts-accent-dot${theme.id === accent ? " ts-accent-dot-active" : ""}`}
+          style={{ "--dot": theme.hex } as React.CSSProperties}
+          onClick={() => onChange(theme.id)}
+          title={t("accent.use", { name: theme.name })}
+          aria-label={t("accent.use", { name: theme.name })}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ActionIcon({ children }: { children: ReactNode }) {
   return (
     <svg
@@ -7474,6 +7523,7 @@ function DesignPanel({
   const iconPackInputRef = useRef<HTMLInputElement | null>(null);
 
   const builtins: { id: DesignTheme; name: string; desc: string }[] = [
+    { id: "glass", name: t("design.theme.glass"), desc: t("design.theme.glass.desc") },
     { id: "standard", name: t("design.theme.standard"), desc: t("design.theme.standard.desc") },
     { id: "nova", name: t("design.theme.nova"), desc: t("design.theme.nova.desc") },
     { id: "pulse", name: t("design.theme.pulse"), desc: t("design.theme.pulse.desc") },
@@ -7564,6 +7614,7 @@ function DesignPanel({
             value={editing.baseTheme}
             onChange={(e) => setEditing({ ...editing, baseTheme: e.target.value as DesignTheme })}
           >
+            <option value="glass">{t("design.theme.glass")}</option>
             <option value="standard">{t("design.theme.standard")}</option>
             <option value="nova">{t("design.theme.nova")}</option>
             <option value="pulse">{t("design.theme.pulse")}</option>
@@ -8919,6 +8970,13 @@ function AppInner() {
   );
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => loadCustomThemes());
   const [designSelection, setDesignSelection] = useState<string>(() => loadDesignSelection());
+  // Chips accent ramp (cyan/purple/red/blue). Written onto the app root as CSS
+  // variables below, so exactly one place owns the colour maths.
+  const [accent, setAccent] = useState<AccentId>(() => loadAccent());
+  const handleAccentChange = (next: AccentId) => {
+    setAccent(next);
+    saveAccent(next);
+  };
   const activeCustomTheme = designSelection.startsWith("custom:")
     ? customThemes.find((th) => `custom:${th.id}` === designSelection) ?? null
     : null;
@@ -8950,7 +9008,7 @@ function AppInner() {
       saveCustomThemes(next);
       return next;
     });
-    if (designSelection === `custom:${id}`) handleDesignSelectionChange("standard");
+    if (designSelection === `custom:${id}`) handleDesignSelectionChange("glass");
   };
   // Custom themes ship as free-form CSS - inject/replace it in a dedicated <style>
   // tag while active, and drop it the moment no custom theme is selected.
@@ -12556,6 +12614,12 @@ function AppInner() {
   // Nova and IDE collapse the menubar behind a hamburger button.
   const compactMenu = designTheme === "nova" || designTheme === "ide";
   const micLabel = !micOn ? t("toolbar.micEnable") : inputMuted ? t("toolbar.micUnmute") : t("toolbar.micMute");
+  // One object per accent change: React diffs the custom properties by value, so
+  // this is a plain object rather than a per-render rebuild of the palette.
+  const accentStyle = useMemo(() => accentVariables(accent) as React.CSSProperties, [accent]);
+  // Refraction needs the SVG filter definitions mounted once; the hook no-ops
+  // where `backdrop-filter: url()` is unsupported.
+  useEffect(() => installLiquidGlass(), []);
   const streamLabel = DEMO_MODE
     ? t("publish.demoUnavailable")
     : `${publishState === "live" ? t("publish.stop") : t("publish.start")} (${t("publish.alpha")})`;
@@ -12570,6 +12634,8 @@ function AppInner() {
       }`}
       data-custom-theme={activeCustomTheme?.id}
       data-design-theme={designTheme}
+      data-accent={accent}
+      style={accentStyle}
     >
       {DEMO_MODE && (
         <div className="ts-demo-banner">
@@ -12582,7 +12648,7 @@ function AppInner() {
           </button>
         </div>
       )}
-      <div className="ts-menubar">
+      <div className="ts-menubar" data-lg>
         <div className={compactMenu ? "ts-nova-menu-dropdown" : undefined} ref={novaMenuRef}>
         {compactMenu && (
           <button
@@ -13139,7 +13205,7 @@ function AppInner() {
         )}
       </div>
 
-      <div className="ts-toolbar">
+      <div className="ts-toolbar" data-lg>
         {designTheme === "nova" && connected && ownClient && (
           <div className="ts-nova-toolbar-self">
             <span className="ts-nova-toolbar-avatar">
@@ -13385,6 +13451,7 @@ function AppInner() {
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
+          <AccentSwitcher accent={accent} onChange={handleAccentChange} />
           <img src={`${import.meta.env.BASE_URL}chips-mark.png`} alt="" className="ts-app-logo" />
           <span className="ts-app-title" role="heading" aria-level={1}>Chips</span>
         </div>
@@ -14402,7 +14469,7 @@ function AppInner() {
       )}
 
       <main className="ts-body">
-        <div className="ts-upper" style={{ height: upperHeight }}>
+        <div className="ts-upper" style={{ height: upperHeight }} data-lg>
           <div className="ts-tree-panel" style={{ width: treeWidth }} onKeyDown={handleTreeKeyDown}>
             {connected ? (
               <>
@@ -14490,7 +14557,7 @@ function AppInner() {
 
         <div className="ts-resize-handle-horizontal" onMouseDown={startUpperResize} />
 
-        <div className="ts-chat-panel">
+        <div className="ts-chat-panel" data-lg>
           {connected && designTheme === "ide" && (
             <div className="ts-ide-breadcrumb">
               {serverName || host}
@@ -14643,7 +14710,7 @@ function AppInner() {
         </div>
       </main>
 
-      <div className="ts-log">
+      <div className="ts-log" data-lg>
         {log.slice(-50).map((entry, i) => {
           let text = entry.text;
           if (/os[- ]?error\s*10049/i.test(text) || /angeforderte Adresse ist in diesem Kontext ungültig/i.test(text)) {

@@ -1,0 +1,1074 @@
+/* ============================================================================
+   Chips — Liquid Glass design (default)
+   ============================================================================
+
+   Translucent layered glass on a near-black page: surfaces are
+   rgba(255,255,255,0.05) over #05050a, blurred with backdrop-filter
+   blur(20px) saturate(160%), with a bright specular highlight along the TOP
+   edge and a soft inner depth. Floating pill controls, 20px card radii.
+
+   Refraction: panels carrying [data-lg] get a canvas-generated displacement
+   map driving `backdrop-filter: url(#…)` (see src/liquidGlass.ts). The
+   browser rewrites --lg-filter to the right filter id per element shape; when
+   `backdrop-filter: url()` is unavailable the variable stays unset and only
+   the blur layer applies — the plain-blur fallback is the base rule, the
+   refraction is layered on top of it (never instead of it).
+
+   Hard rules honoured here:
+     - no glow: no blurred coloured halos, no neon bloom, no glowing shadows.
+       Light is the crisp specular edge only (thin inset white line/gradient).
+     - no letter motion: no animation of glyphs, no wave/bounce/wiggle.
+       Transitions are colour/opacity/1px-transform only, on the pointer.
+     - rows and chat lines never refract; plain blur for them at most.
+
+   Variables sit in :where() (zero specificity) like the other designs, so a
+   user-authored custom theme can still override them; component rules use
+   .ts-app.ts-design-glass so they beat App.css without !important.
+   ========================================================================== */
+
+/* --- Typefaces: bundled locally, no font CDN (no third-party requests) ----- */
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-500-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-800-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("../assets/fonts/plus-jakarta-sans-latin-ext-800-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Vazirmatn: fallback for Persian *user content* (nicknames, chat, away
+   messages). Never applied to the interface itself — Chips' UI is English and
+   LTR; Persian text simply falls through to this family glyph by glyph. */
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/vazirmatn-arabic-400-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/vazirmatn-arabic-500-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/vazirmatn-arabic-600-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../assets/fonts/vazirmatn-arabic-700-normal.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+
+/* --- Palette --------------------------------------------------------------- */
+
+:where(.ts-app.ts-design-glass) {
+  /* Base page and glass tints. */
+  --bg: #05050a;
+  --bg-deep: #030308;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(255, 255, 255, 0.075);
+  --surface-hover: rgba(255, 255, 255, 0.09);
+  --surface-press: rgba(255, 255, 255, 0.055);
+  --surface-sunken: rgba(0, 0, 0, 0.22);
+
+  /* Specular edge + depth. --edge is the crisp top highlight; --edge-soft the
+     quieter full-contour line; --depth the soft inner shadow. */
+  --edge: rgba(255, 255, 255, 0.55);
+  --edge-soft: rgba(255, 255, 255, 0.12);
+  --depth: rgba(0, 0, 0, 0.38);
+
+  /* Accent defaults are the cyan theme; App.tsx overwrites --primary,
+     --primary-rgb, --accent, --accent-rgb and --accent-contrast inline when the
+     switcher changes, so these are only the pre-mount values. */
+  --primary: #74e5ff;
+  --primary-rgb: 116, 229, 255;
+  --primary-dim: rgba(116, 229, 255, 0.62);
+  --accent-contrast: #04121a;
+
+  --text: #eef1f7;
+  --text-muted: #9aa3b2;
+  --text-faint: #6b7382;
+  --client-text: #dfe4ee;
+  --self-text: var(--primary);
+  --success: #4ade80;
+  --danger: #ff7a7a;
+
+  --glass-blur: 20px;
+  --glass-saturate: 160%;
+  --glass-radius: 20px;
+  --pill-radius: 999px;
+
+  /* Upstream variable names other rules still read. */
+  --bg-toolbar-1: transparent;
+  --bg-toolbar-2: transparent;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-soft: rgba(255, 255, 255, 0.06);
+  --input-bg: rgba(255, 255, 255, 0.045);
+  --input-text: var(--text);
+  --button-bg-1: rgba(255, 255, 255, 0.06);
+  --button-bg-2: rgba(255, 255, 255, 0.03);
+  --button-bg-hover-1: rgba(255, 255, 255, 0.1);
+  --button-bg-hover-2: rgba(255, 255, 255, 0.06);
+  --row-hover: rgba(255, 255, 255, 0.07);
+  --log-bg: transparent;
+  --log-text: var(--text-muted);
+  --log-error: var(--danger);
+  --alpha-badge: #f2b96a;
+
+  color-scheme: dark;
+  font-family: "Plus Jakarta Sans", "Vazirmatn", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.005em;
+
+  /* The page itself: a still, near-black backdrop with one very soft vertical
+     lightening. No coloured wash, no glow — the panels do the work. */
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(255, 255, 255, 0.045), transparent 60%),
+    linear-gradient(180deg, #07070d 0%, var(--bg) 38%, var(--bg-deep) 100%);
+  gap: 10px;
+  padding: 10px;
+}
+
+/* Persian (and other RTL snippets) inside user content: let the browser pick
+   direction from the first strong character, so a Persian nickname reads
+   right-to-left while the surrounding row keeps the LTR interface order. */
+.ts-app.ts-design-glass :is(
+  .ts-tree-label,
+  .ts-client-name,
+  .ts-chat-from,
+  .ts-chat-bubble,
+  .ts-info-row span,
+  .ts-speaking-now-name,
+  .ts-tree-empty
+) {
+  unicode-bidi: plaintext;
+}
+
+/* --- Shared glass material ------------------------------------------------ */
+
+/* Panels, bars and cards. Base layer = blur + saturate (and the tint); the
+   refraction, when this element got a filter, is appended on the next layer.
+   Order matters: the plain blur must survive on its own where url() is
+   unsupported or the budget was spent. */
+.ts-app.ts-design-glass :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log)[data-lg],
+.ts-app.ts-design-glass :is(.ts-tree-panel, .ts-info-panel, .ts-chat-tabs, .ts-server-row, .ts-speaking-now)[data-lg] {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--glass-radius);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  /* Crisp specular top edge + soft inner depth. Two 1px-ish inset lines: the
+     top one bright, the rest of the contour quiet. This is the only light. */
+  box-shadow:
+    inset 0 1px 0 0 var(--edge),
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.07),
+    inset -1px 0 0 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.35),
+    inset 0 12px 24px -18px rgba(255, 255, 255, 0.35),
+    inset 0 -24px 36px -30px var(--depth);
+}
+
+/* The refraction layer. Only present once liquidGlass.ts has assigned a filter
+   to this element (Chromium/WebView2 and within the 12-element budget). */
+@supports (backdrop-filter: url(#chips-lg-probe)) {
+  .ts-app.ts-design-glass[data-lg-refract] :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log)[data-lg-filter="on"],
+  .ts-app.ts-design-glass[data-lg-refract] :is(.ts-tree-panel, .ts-info-panel, .ts-chat-tabs, .ts-server-row, .ts-speaking-now)[data-lg-filter="on"] {
+    backdrop-filter: var(--lg-filter) blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: var(--lg-filter) blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+}
+
+/* Floating bars sit slightly higher off the page than the big panels. */
+.ts-app.ts-design-glass > .ts-menubar,
+.ts-app.ts-design-glass > .ts-toolbar,
+.ts-app.ts-design-glass > .ts-log {
+  background: var(--surface-strong);
+  flex-shrink: 0;
+}
+
+.ts-app.ts-design-glass > .ts-menubar {
+  border-radius: var(--pill-radius);
+  padding: 0.3rem 0.9rem;
+  gap: 1.15rem;
+  margin-bottom: 2px;
+}
+
+.ts-app.ts-design-glass > .ts-toolbar {
+  border-radius: var(--glass-radius);
+  padding: 0.5rem 0.9rem;
+  gap: 0.5rem;
+}
+
+.ts-app.ts-design-glass > .ts-log {
+  border-radius: var(--glass-radius);
+  padding: 0.5rem 0.9rem;
+  max-height: 5.5rem;
+  overflow-y: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* Menu bar items: pill hover, accent underline for the open menu. */
+.ts-app.ts-design-glass .ts-menubar-item {
+  color: var(--text-muted);
+  transition: color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-menubar-item-active {
+  color: var(--text);
+  padding: 0.22rem 0.6rem;
+  border-radius: var(--pill-radius);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-menubar-item-active:hover {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+/* --- Toolbar: a floating strip of pill controls --------------------------- */
+
+.ts-app.ts-design-glass .ts-toolbar-icons {
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ts-app.ts-design-glass :is(.ts-icon-button, .ts-icon-caret) {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.3rem 0.62rem;
+  line-height: 1;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+  /* Specular top edge, same language as the panels — kept crisp. */
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+}
+
+.ts-app.ts-design-glass :is(.ts-icon-button, .ts-icon-caret):hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.ts-app.ts-design-glass :is(.ts-icon-button, .ts-icon-caret):active:not(:disabled) {
+  background: var(--surface-press);
+  transform: translateY(1px);
+}
+
+.ts-app.ts-design-glass :is(.ts-icon-button, .ts-icon-caret):disabled {
+  opacity: 0.4;
+}
+
+/* Active states read as a filled accent pill, not a glow. */
+.ts-app.ts-design-glass :is(.ts-mic-on, .ts-recording-on, .ts-away-on, .ts-muted-on) {
+  background: rgba(var(--primary-rgb), 0.16);
+  border-color: rgba(var(--primary-rgb), 0.42);
+  color: var(--primary);
+}
+
+.ts-app.ts-design-glass .ts-toolbar-sep {
+  background: var(--border);
+  margin: 0 0.25rem;
+  opacity: 0.7;
+}
+
+.ts-app.ts-design-glass .ts-app-logo {
+  height: 22px;
+  width: 22px;
+  border-radius: 7px;
+  margin-left: auto;
+  border: 1px solid var(--border-soft);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.28);
+}
+
+.ts-app.ts-design-glass .ts-app-title {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-left: 0.35rem;
+}
+
+.ts-app.ts-design-glass .ts-toolbar-fields {
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.ts-app.ts-design-glass .ts-toolbar-fields label {
+  color: var(--text-muted);
+  gap: 0.4rem;
+  font-size: 11.5px;
+}
+
+.ts-app.ts-design-glass .ts-toolbar-fields :is(input:not([type="range"]), select) {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--input-text);
+  padding: 0.24rem 0.7rem;
+  font: inherit;
+  font-size: 11.5px;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-toolbar-fields :is(input:not([type="range"]), select):focus-visible {
+  outline: none;
+  border-color: rgba(var(--primary-rgb), 0.55);
+  background: var(--surface-strong);
+}
+
+.ts-app.ts-design-glass .ts-toolbar-fields button,
+.ts-app.ts-design-glass .ts-icon-select select {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.26rem 0.85rem;
+  font: inherit;
+  font-size: 11.5px;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-toolbar-fields button:hover {
+  background: var(--surface-hover);
+}
+
+/* Accent switcher: four small pill swatches at the end of the toolbar row. */
+.ts-accent-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.18rem 0.4rem;
+  border-radius: var(--pill-radius);
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.ts-accent-dot {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: var(--pill-radius);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--dot);
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+}
+
+.ts-accent-dot:hover {
+  transform: scale(1.12);
+}
+
+.ts-accent-dot-active {
+  border-color: rgba(255, 255, 255, 0.85);
+  transform: scale(1.12);
+}
+
+.ts-accent-dot:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* --- Body layout: the TeamSpeak arrangement, now in floating glass --------- */
+
+.ts-app.ts-design-glass > .ts-body {
+  background: transparent;
+  gap: 10px;
+  padding: 0;
+}
+
+.ts-app.ts-design-glass .ts-upper {
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--glass-radius);
+}
+
+/* The tree and the info panel are panes inside the upper glass card: no second
+   glass layer (which would double-blur), just a quiet sunken surface. */
+.ts-app.ts-design-glass :is(.ts-tree-panel, .ts-info-panel) {
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.ts-app.ts-design-glass .ts-tree-panel {
+  padding: 0.35rem 0.4rem;
+}
+
+.ts-app.ts-design-glass .ts-info-panel {
+  padding: 0.7rem 0.95rem;
+}
+
+/* The info panel and the tree are separated by a hairline instead of a border. */
+.ts-app.ts-design-glass .ts-side-panel {
+  border-left: 1px solid var(--border-soft);
+  padding-left: 6px;
+}
+
+.ts-app.ts-design-glass :is(.ts-resize-handle-vertical, .ts-resize-handle-horizontal) {
+  background: transparent;
+  border-radius: var(--pill-radius);
+  transition: background-color 140ms ease;
+}
+
+.ts-app.ts-design-glass :is(.ts-resize-handle-vertical, .ts-resize-handle-horizontal):hover {
+  background: rgba(var(--primary-rgb), 0.3);
+}
+
+.ts-app.ts-design-glass .ts-banner-panel {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* --- Channel tree: glass rows, morphing hover/press ---------------------- */
+
+.ts-app.ts-design-glass .ts-row {
+  border-radius: 10px;
+  padding: 3px 0.45rem;
+  line-height: 20px;
+  border: 1px solid transparent;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-channel-row {
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass :is(.ts-channel-row, .ts-client-row):hover {
+  background: var(--surface-hover);
+  border-color: var(--border-soft);
+}
+
+.ts-app.ts-design-glass .ts-channel-row:active {
+  background: var(--surface-press);
+}
+
+.ts-app.ts-design-glass .ts-row-selected {
+  background: rgba(var(--primary-rgb), 0.14);
+  border-color: rgba(var(--primary-rgb), 0.38);
+  outline: none;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
+}
+
+.ts-app.ts-design-glass .ts-row-selected:hover {
+  background: rgba(var(--primary-rgb), 0.18);
+}
+
+.ts-app.ts-design-glass .ts-server-row {
+  color: var(--text);
+  font-weight: 700;
+  padding: 0.35rem 0.55rem;
+  margin-bottom: 0.4rem;
+  border-radius: 12px;
+}
+
+/* Rows are floats too: the tree is a stack of pills, spaced a touch. */
+.ts-app.ts-design-glass .ts-tree-list {
+  padding-left: 0.9rem;
+  margin: 0;
+}
+
+.ts-app.ts-design-glass .ts-tree-list-root {
+  padding-left: 0;
+}
+
+.ts-app.ts-design-glass .ts-tree-expander span {
+  border-top-color: var(--text-muted);
+}
+
+.ts-app.ts-design-glass .ts-tree-expander-collapsed span {
+  border-top-color: transparent;
+  border-left-color: var(--text-muted);
+}
+
+.ts-app.ts-design-glass .ts-client-row.ts-self {
+  color: var(--primary);
+}
+
+/* Talking: an accent rim, not a glow. */
+.ts-app.ts-design-glass .ts-client-row.ts-talking {
+  outline: none;
+  border-color: rgba(var(--primary-rgb), 0.5);
+  background: rgba(var(--primary-rgb), 0.1);
+}
+
+.ts-app.ts-design-glass .ts-tree-search {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--input-text);
+  padding: 0.3rem 0.75rem;
+  font: inherit;
+  font-size: 12px;
+  margin-bottom: 0.45rem;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-tree-search:focus-visible {
+  outline: none;
+  border-color: rgba(var(--primary-rgb), 0.55);
+  background: var(--surface-strong);
+}
+
+.ts-app.ts-design-glass .ts-tree-empty {
+  color: var(--text-faint);
+  font-style: normal;
+  padding: 1rem 0.85rem;
+}
+
+/* Talk lamps: flat glass beads with a crisp rim (no bloom). */
+.ts-app.ts-design-glass .ts-talk-lamp-idle,
+.ts-app.ts-design-glass .ts-talk-lamp-talking {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.ts-app.ts-design-glass .ts-talk-lamp-talking {
+  background: var(--success);
+}
+
+/* --- Info panel ---------------------------------------------------------- */
+
+.ts-app.ts-design-glass .ts-info-title {
+  font-weight: 700;
+  color: var(--text);
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 0.4rem;
+}
+
+.ts-app.ts-design-glass .ts-info-row {
+  color: var(--text-muted);
+  padding: 0.16rem 0;
+}
+
+.ts-app.ts-design-glass .ts-info-row span:first-child {
+  color: var(--text-faint);
+}
+
+.ts-app.ts-design-glass .ts-info-avatar {
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+}
+
+.ts-app.ts-design-glass .ts-server-conn-table :is(th, td) {
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0.35rem 0.4rem;
+}
+
+/* --- Chat ----------------------------------------------------------------- */
+
+.ts-app.ts-design-glass .ts-chat-panel {
+  margin: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ts-app.ts-design-glass .ts-chat-tabs {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  padding: 0.2rem;
+  margin: 0.55rem 0.75rem 0;
+  background: var(--surface);
+  gap: 0.2rem;
+}
+
+.ts-app.ts-design-glass .ts-chat-tab {
+  border: 1px solid transparent;
+  border-radius: var(--pill-radius);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.26rem 0.8rem;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-chat-tab:hover:not(.ts-chat-tab-active) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .ts-chat-tab-active {
+  background: rgba(var(--primary-rgb), 0.16);
+  border-color: rgba(var(--primary-rgb), 0.4);
+  color: var(--primary);
+}
+
+.ts-app.ts-design-glass .ts-chat-tab-unread {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ts-app.ts-design-glass .ts-chat-messages {
+  padding: 0.7rem 0.9rem;
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .ts-chat-line {
+  border-radius: 12px;
+  padding: 2px 0.35rem;
+}
+
+.ts-app.ts-design-glass .ts-chat-from {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.ts-app.ts-design-glass .ts-chat-line-self .ts-chat-from {
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .ts-chat-bubble {
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .ts-chat-line-self {
+  background: rgba(var(--primary-rgb), 0.07);
+}
+
+.ts-app.ts-design-glass .ts-chat-line-log {
+  color: var(--text-faint);
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row {
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem 0.7rem;
+  border-top: 1px solid var(--border-soft);
+  margin: 0 0.75rem;
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row textarea {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--input-text);
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  font-size: 12.5px;
+  resize: none;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row textarea:focus-visible {
+  outline: none;
+  border-color: rgba(var(--primary-rgb), 0.55);
+  background: var(--surface-strong);
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row button {
+  border: 1px solid rgba(var(--primary-rgb), 0.4);
+  border-radius: var(--pill-radius);
+  background: rgba(var(--primary-rgb), 0.16);
+  color: var(--primary);
+  padding: 0.4rem 1.05rem;
+  font: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row button:hover:not(:disabled) {
+  background: rgba(var(--primary-rgb), 0.24);
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ts-app.ts-design-glass .ts-chat-input-row button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* --- Speaking bar (used by the Pulse/IDE bases, styled for glass too) ---- */
+
+.ts-app.ts-design-glass .ts-speaking-now {
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.ts-app.ts-design-glass .ts-speaking-now-tile {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-speaking-now-tile-active {
+  border-color: rgba(var(--primary-rgb), 0.55);
+  background: rgba(var(--primary-rgb), 0.1);
+}
+
+/* --- Dialogs: the largest glass cards ------------------------------------ */
+
+.ts-app.ts-design-glass .ts-dialog-backdrop {
+  background: rgba(3, 3, 8, 0.55);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+
+.ts-app.ts-design-glass .ts-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--glass-radius);
+  background: rgba(18, 18, 26, 0.72);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 0 var(--edge),
+    inset 0 12px 28px -22px rgba(255, 255, 255, 0.4),
+    inset 0 -30px 40px -34px var(--depth);
+}
+
+.ts-app.ts-design-glass .ts-dialog-titlebar {
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0.7rem 0.95rem;
+  font-weight: 600;
+}
+
+.ts-app.ts-design-glass .ts-dialog-titlebar button {
+  border-radius: var(--pill-radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-dialog-titlebar button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .ts-dialog :is(input[type="text"], input[type="password"], input[type="search"], input:not([type]), select, textarea) {
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  color: var(--input-text);
+  font: inherit;
+  padding: 0.4rem 0.7rem;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-dialog :is(input, select, textarea):focus-visible {
+  outline: none;
+  border-color: rgba(var(--primary-rgb), 0.55);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.ts-app.ts-design-glass .ts-dialog-buttons {
+  gap: 0.5rem;
+  padding: 0.75rem 0.95rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.ts-app.ts-design-glass .ts-dialog-buttons button,
+.ts-app.ts-design-glass .ts-options-content button {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0.38rem 1rem;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-dialog-buttons button:hover:not(:disabled),
+.ts-app.ts-design-glass .ts-options-content button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.ts-app.ts-design-glass .ts-dialog-buttons button:active:not(:disabled),
+.ts-app.ts-design-glass .ts-options-content button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ts-app.ts-design-glass .ts-dialog-buttons button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Primary action: the accent pill. */
+.ts-app.ts-design-glass .ts-dialog-buttons button[type="submit"],
+.ts-app.ts-design-glass .ts-connect-nova-primary {
+  background: rgba(var(--primary-rgb), 0.2);
+  border-color: rgba(var(--primary-rgb), 0.45);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.ts-app.ts-design-glass .ts-dialog-buttons button[type="submit"]:hover:not(:disabled) {
+  background: rgba(var(--primary-rgb), 0.28);
+}
+
+/* Options dialog: sidebar as a pill list, content on plain glass. */
+.ts-app.ts-design-glass .ts-options-sidebar {
+  border-right: 1px solid var(--border-soft);
+  padding: 0.5rem;
+  gap: 0.15rem;
+}
+
+.ts-app.ts-design-glass .ts-options-sidebar-item {
+  border: 1px solid transparent;
+  border-radius: var(--pill-radius);
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.35rem 0.7rem;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-options-sidebar-item:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .ts-options-sidebar-item-active {
+  background: rgba(var(--primary-rgb), 0.15);
+  border-color: rgba(var(--primary-rgb), 0.38);
+  color: var(--primary);
+}
+
+/* --- Menus and context menus --------------------------------------------- */
+
+.ts-app.ts-design-glass .ts-menu {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(16, 16, 24, 0.82);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  padding: 0.3rem;
+  box-shadow:
+    inset 0 1px 0 0 var(--edge),
+    inset 0 10px 24px -20px rgba(255, 255, 255, 0.32),
+    inset 0 -20px 30px -28px var(--depth);
+}
+
+.ts-app.ts-design-glass .ts-menu-item {
+  border-radius: 10px;
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.ts-app.ts-design-glass .ts-menu-item:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--primary);
+}
+
+.ts-app.ts-design-glass .ts-menu-separator {
+  background: var(--border-soft);
+}
+
+/* --- Scrolling: thin glass thumbs ---------------------------------------- */
+
+.ts-app.ts-design-glass ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ts-app.ts-design-glass ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ts-app.ts-design-glass ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--pill-radius);
+  background-clip: padding-box;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.ts-app.ts-design-glass ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
+.ts-app.ts-design-glass ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* --- Focus: one crisp accent ring ---------------------------------------- */
+
+.ts-app.ts-design-glass *:focus-visible,
+.ts-app.ts-design-glass .ts-row:focus-visible,
+.ts-app.ts-design-glass .ts-plain-button:focus-visible {
+  outline: 2px solid rgba(var(--primary-rgb), 0.75);
+  outline-offset: 1px;
+}
+
+/* --- Element-specific upstream boxes that must lose their 2003 look ------ */
+
+.ts-app.ts-design-glass .ts-alpha-badge {
+  border-radius: var(--pill-radius);
+  border-color: rgba(242, 185, 106, 0.55);
+  color: var(--alpha-badge);
+}
+
+.ts-app.ts-design-glass .ts-alpha-note {
+  border-left: 2px solid rgba(242, 185, 106, 0.55);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ts-app.ts-design-glass .ts-stream-panel,
+.ts-app.ts-design-glass .ts-hotkeys-table kbd {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(16, 16, 24, 0.82);
+}
+
+.ts-app.ts-design-glass .ts-hotkeys-table kbd {
+  border-radius: 8px;
+  padding: 0.05rem 0.45rem;
+}
+
+.ts-app.ts-design-glass .ts-update-toast,
+.ts-app.ts-design-glass .ts-news-ticker,
+.ts-app.ts-design-glass .ts-donate-fab,
+.ts-app.ts-design-glass .ts-feedback-fab {
+  border: 1px solid var(--border);
+  border-radius: var(--pill-radius);
+  background: rgba(16, 16, 24, 0.8);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 1px 0 0 var(--edge);
+}
+
+.ts-app.ts-design-glass .ts-news-ticker a {
+  color: var(--primary);
+}
+
+/* --- Demo banner (never shown in the desktop build) ---------------------- */
+
+.ts-app.ts-design-glass .ts-demo-banner {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+/* --- Layout fixes --------------------------------------------------------- */
+
+/* The upper glass card is sized in px by the vertical resize handle, so the
+   tree and info panes must be able to shrink inside it instead of pushing the
+   card taller. */
+.ts-app.ts-design-glass .ts-upper {
+  min-height: 0;
+}
+
+.ts-app.ts-design-glass .ts-tree-panel,
+.ts-app.ts-design-glass .ts-info-panel {
+  min-height: 0;
+}
+
+/* The log is a floating bar here, not a bordered strapline. */
+.ts-app.ts-design-glass .ts-log {
+  border-top: 0;
+}
+
+.ts-app.ts-design-glass .ts-chat-panel {
+  min-height: 0;
+}
+
+/* Without backdrop-filter (Firefox, and any WebView2 build with the effect
+   turned off) the glass must still read as glass: a slightly denser tint
+   stands in for the blur. This is the documented fallback layer. */
+@supports not (backdrop-filter: blur(1px)) {
+  .ts-app.ts-design-glass :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log, .ts-tree-panel, .ts-info-panel) {
+    background: rgba(20, 20, 30, 0.72);
+  }
+}
+
+/* --- Narrow layouts: the floating padding collapses ---------------------- */
+
+@container (max-width: 780px) {
+  .ts-app.ts-design-glass {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .ts-app.ts-design-glass > .ts-body {
+    gap: 6px;
+  }
+
+  .ts-app.ts-design-glass .ts-upper {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .ts-app.ts-design-glass .ts-chat-panel {
+    margin: 0 6px 6px;
+  }
+}
