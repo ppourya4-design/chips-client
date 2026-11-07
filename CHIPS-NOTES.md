@@ -362,3 +362,78 @@ Connector exposure is intentionally limited to existing protocol data and operat
 The UI preserves description text around its `[s:v1;…]` token, reapplies local preferences on initial channel snapshots, writes when customization is changed, parses descriptions for every visible client, and applies the parsed name recipe/ring in the tree and profile card. The profile popover contains the banner, overlapping avatar, status, team-group chips with the server's real group icons, current rank/channel and optional XP. Role bucketing is deterministic: names matching `admin|moderator|staff|owner|support` → Staff; known ladder labels matching `rank|level|xp|rookie|member|veteran|legend` → Rank; game-title names matching `game|minecraft|valorant|league|cs2|apex|fortnite|dota` → Games; all other names → Fun. This mapping is deliberately name-based because server group IDs are instance-specific. Exact XP is never derived from rank; the optional `xp` token field is only displayed if supplied.
 
 `status` (`st`, percent-encoded UTF-8, max 80 characters) extends the token grammar. The customization panel includes local avatar/banner image file pickers, gradient stops/direction, card/name colors, effects/rings, and JSON transfer. Image bytes are stored in local styles.json/localStorage and are not embedded in the description token (to avoid oversized descriptions); therefore image selections are local-only while colors, effects, ring, talking flag, and status synchronize through the description token. Server category mapping and image-token limitations are stated explicitly.
+
+## Step 5 — final build and QA
+
+Step 5 re-runs the Windows build on the final state, adds the README, and puts the app through the
+release checklist below. It also fixed the two things the checklist turned up. No design was
+improvised: what could not be settled in code is reported as a finding instead.
+
+### What was verified, honestly
+
+The whole step ran in a Linux sandbox: no Windows host, no browser engine, no way to reach
+`wwts.ir:1694`, and artifact downloads are blocked here. So the QA below separates what the code
+and the bundle prove from what still needs one run on a real Windows PC. Nothing is marked PASS on
+the strength of a CI build alone.
+
+| # | Checklist item | Result | Evidence / reason |
+|---|---|---|---|
+| 1 | Fresh install launches; connector sidecar starts and stops cleanly with the app | **CANNOT-VERIFY-HERE** | The Windows job builds the NSIS installer green, and Tauri's bundler strips the target triple, so `ts-connector.exe` is installed next to `Chips.exe` (`tauri-bundler` `bundle/settings.rs::copy_binaries`). `main.rs` resolves exactly `current_exe().parent()/ts-connector.exe`, rejects foreign binaries/flags, `stop_connector` sends `disconnect` and kills after 3 s, and `RunEvent::Exit` kills whatever is left. Bridge tests cover stop-on-close and close-during-spawn. Actually launching and watching the sidecar appear/disappear in Task Manager needs a Windows host. |
+| 2 | Preset server `wwts.ir:1694` connects | **CANNOT-VERIFY-HERE** | The connect dialog is pre-filled with `wwts.ir:1694` (`web/src/App.tsx`, `AppInner` host state) and never auto-connects; the native bridge accepts `host:port` and starts the sidecar with `--address=wwts.ir:1694`. Real connection (and voice) can only be proven on a real Windows PC against that server — this sandbox has no route to it. |
+| 3 | Channel tree and chat usable | **PASS** (code/event level) | The tree renders every channel/client with the Step 4 label, ring and badges; chat/server/PM commands map to the existing wire commands and the bridge test asserts the exact bytes (`chat hello world\n`, `switch 3 <base64>\n`). The rendered result was not exercised in a browser here. |
+| 4 | Profile card opens for self and for others | **PASS** (code level) | Every client row renders the same `setProfileClientId(c.id)` label button (`ChannelTree`), and the card is rendered from `clients.find(c => c.id === profileClientId)`; the own client is just the `ts-self` row, so self and others take the identical path. Not clicked through in a browser here. |
+| 5 | A style change is visible from a second client without reconnect | **PASS** (code/event level), live two-PC part **CANNOT-VERIFY-HERE** | *Was broken in the shipped build* — see fix 1. Now: `clientedit client_description` → connector `clientDescriptionChanged` → bridge event → `clients` patched in place → plate/ring/card re-render. The bridge test covers the mapping and the write. Seeing it happen between two PCs needs two Windows machines on one server. |
+| 6 | The Reduce-animations toggle freezes the name/card animations | **PASS** (static, now enforced) | `chips-reduce-motion` on the app root selects the second freeze block in `name-effects.css` (`animation: none !important`, `--spark-pos: 0deg`, sweep `content: none`, flat gradient); `web/tests/motion-policy.test.ts` fails if either freeze path stops covering `.chips-name`, `.chips-electric-border` or `.chips-avatar`. Computed styles were not sampled (no browser engine). |
+| 7 | No-calls-home audit still holds on the final bundle | **PASS** (bundle + config level), runtime capture **CANNOT-VERIFY-HERE** | Fresh `vite build` grep of `dist/` returns only the already-audited strings: the three disabled `gateway.webspeak3.de` branches, vanity links (copied, never opened), `w3.org` namespaces, `react.dev` error links, Workbox's `bit.ly` error-message text, and the deliberate STUN servers. No new dependency (`web/package.json` and the lockfiles are unchanged vs `main`), no new capability, CSP unchanged, `sw.js` precaches 39 local URLs and nothing external. Packet capture on the installed app still needs a real machine. |
+
+Two findings are deliberately **not** fixed here because they are design decisions, not bugs:
+
+- **Your own plate updates after the server echoes the change.** `updateProfile` writes the token
+  and the UI re-renders from the description the server reports back, so your plate can lag one
+  round-trip — and on a server that refuses description edits it keeps the old style while the
+  editor shows the new one. Optimistic local application would be a design change.
+- **The client name in the tree is now a `<button>` inside `role="treeitem"`.** Clicking a name
+  opens the profile card instead of selecting the row, and the treeitem contains a focusable
+  control. Functional and keyboard-reachable, but it is a nesting an a11y review should decide on.
+
+Also noted, not changed: the lint run is `0 errors / 11 warnings` (two more
+`no-constant-binary-expression` warnings than at Step 0, both in upstream code paths), and the
+client's style token is visible as text in native TeamSpeak clients, which is the documented price
+of syncing through the description field (README, "Profile style sync").
+
+### Fixes made in Step 5
+
+**1 — the shipped app could not sync profile styles at all.** Step 4 added the description field to
+the connector and the gateway, but the *desktop* bridge — the one the Tauri app uses — dropped it:
+the client snapshot had no `description`, `{type:"setDescription"}` fell into the "unknown message
+type" branch, and `clientDescriptionChanged` was never mapped. Writing a style failed with an
+error, and another client's change could only be seen after reconnecting. Fixed in
+`web/src/desktop/connection.ts`, `web/src/desktop/socket.ts`, `web/src/App.tsx` and
+`web/src/connectionSessions.ts` (also for parked tabs), plus a bridge test. The connector, the
+gateway and `tsclientlib` are untouched.
+
+**2 — one keyframe outside the animation law.** The Step 4 popover carried an entrance fade that
+animated `backdrop-filter`. It never ran (the backdrop is not a `[data-chips-anim]` layer, so the
+global freeze killed it), so removing the keyframes changes nothing on screen — but the stylesheet
+no longer contains a rule that would break "light moves, elements don't" if it ever became active.
+The new `web/tests/motion-policy.test.ts` mechanizes the law (keyframes may only touch
+`background-position`, `--spark-pos` and `opacity`; both freeze paths must cover every effect
+class; the global allow-list must stay), and the Windows workflow now runs it alongside the bridge
+test — 10 tests, all green.
+
+### Build and artifact
+
+- Workflow: [`.github/workflows/build.yml`](.github/workflows/build.yml) — *Build Chips for Windows*,
+  triggered on every push to this branch.
+- Runs for this branch:
+  [Actions, branch filter](https://github.com/ppourya4-design/chips-client/actions?query=branch%3Aarena%2F5f155897-chips-client).
+- Artifact: **`Chips-win-x64`** — the NSIS installer for `x86_64-pc-windows-msvc`, unsigned.
+- Local gate on the same tree: `npm run build` (tsc + vite) green, `npm run lint` 0 errors,
+  `tsx --test web/tests/*.test.ts` 10/10.
+
+### Weight
+
+No dependency was added or changed; `web/package.json`, both lockfiles, `connector/`, `gateway/`
+and `tsclientlib/` are byte-identical to `main`. The bundle got marginally smaller: the app CSS
+drops from 51,790 to 51,492 bytes because the dead popover keyframes are gone, the app JS stays at
+403,049 bytes (the new bridge code plus one event case).
