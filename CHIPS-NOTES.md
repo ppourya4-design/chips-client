@@ -134,9 +134,9 @@ Scope: what the **shipped Tauri app** does, not the optional web/gateway build. 
 | Path | Verdict |
 |---|---|
 | Upstream telemetry (`gateway/src/telemetry.ts`, on by default) | **Not shipped.** The gateway is not part of the desktop app; there is no Node process and no telemetry code in the bundle. |
-| Upstream account sync (`web/src/sync.ts`, `https://gateway.webspeak3.de/api/sync`) | **Disabled.** `startAutoSync` is never started when `isTauri()`; `sync.ts` itself throws in the desktop build; Options → Konto now renders a local-only notice instead of an account UI. No request is possible. |
-| Upstream design store (`STORE_URL`) | **Disabled.** `STORE_URL` was already pointed at the app's own origin in the desktop build (which has no `/api/` route); the store panel and its "Store" buttons are now not rendered at all under `isTauri()`. |
-| Upstream news feed (`https://gateway.webspeak3.de/api/store/news`) | **Disabled.** `NewsTicker` returns before fetching when `isTauri()`. A server-configured news item with a URL is rendered through `externalLinkProps`, which copies the address instead of navigating. |
+| Upstream account sync (`web/src/sync.ts`, `https://gateway.webspeak3.de/api/sync`) | **Disabled.** `startAutoSync` is never started when `isTauri()`; `sync.ts` itself throws in the desktop build (`if (isTauri()) throw new Error("Sync is unavailable in Chips")`); Options → Konto now renders a local-only notice instead of an account UI. No request is possible. |
+| Upstream design store (`STORE_URL`) | **Disabled.** `STORE_URL` is the empty string when `isTauri()`, the store panel is never rendered (an early return keeps the fetch in `DesignStorePanel` from ever mounting) and both "Store" buttons are hidden. |
+| Upstream news feed (`https://gateway.webspeak3.de/api/store/news`) | **Disabled.** `NEWS_FEED_URL` is the empty string when `isTauri()` and `NewsTicker` returns before fetching under `isTauri()`. A server-configured news item with a URL is rendered through `externalLinkProps`, which copies the address instead of navigating. |
 | Feedback form, donation link, own-hosted extras | **Absent.** Feedback is own-instance only, the donation link is empty under `isTauri()`, and both are web-build features. |
 | External `<a>` links (About, Help menu, ToS/imprint) | **Never navigated.** All go through `externalLinkProps`: in the desktop build the href is withheld, the click is prevented and the address is copied to the clipboard. |
 | `version.json` / service-worker update polling | **Local only.** Relative fetch against the bundled assets; the app *is* the origin (`https://tauri.localhost`), so this never leaves the machine. |
@@ -144,6 +144,26 @@ Scope: what the **shipped Tauri app** does, not the optional web/gateway build. 
 | Connector TSDNS / `_ts3._udp` / `_gts._udp` SRV lookups | **Unmodified black box.** These are part of TeamSpeak's own resolution protocol and only run against the host the user typed. They are not analytics and were not changed. System DNS is used for a hostname the user entered. |
 | WebRTC STUN (`stun:turn.teamspeak.com`, `stun:turn2.teamspeak.com`, `stun:stun.l.google.com` in `stream.ts`/`publish.ts`) | **Reachable but deliberate.** Streaming/screen-share is an explicit user action, and ICE needs a STUN server to learn its own address. It is listed here rather than silently dropped; the stream feature is upstream's, and refusing to contact a STUN server would make it unusable. No STUN traffic occurs unless the user starts a stream. |
 | Third-party fonts, analytics, ads, crash reporting | **None.** Fonts are bundled; there is no analytics/telemetry SDK anywhere in `web/`. |
+
+### What remains in the shipped JavaScript bundle
+
+The three upstream endpoints are still *present as dead strings* in the built bundle, because Vite substitutes `import.meta.env` at build time while `isTauri()` is a runtime check, and the same bundle also serves the web build:
+
+```text
+https://gateway.webspeak3.de/api/store/news     NEWS_FEED_URL  ("" under isTauri)
+https://gateway.webspeak3.de/api/store/themes   STORE_URL      ("" under isTauri)
+https://gateway.webspeak3.de/api/sync           DEFAULT_SYNC_SERVER (call path throws under isTauri)
+```
+
+They cannot be reached from the desktop app: the desktop value of each constant is `""`, the callers are guarded, and the CSP's `connect-src 'self' ipc: http(s)://ipc.localhost` would block such a request even if a caller slipped through. Callers may notice vanity links (`webspeak3.de`, the GitHub repo, the Weblate page, `ko-fi.com`) — those are text in the About/Help UI, and in the desktop build `externalLinkProps` withholds the `href` and copies it to the clipboard instead of navigating, so they generate no traffic either. Removing the strings entirely would mean forking every call site for a bundle that also ships to the web, which is why they stay as disabled branches rather than being deleted.
+
+### The navigation guard
+
+The first attempt at a WebView2-level guard (`with_webview` + `NavigationStarting` in `web/src-tauri/src/main.rs`) was **reverted**: it needed the `webview2-com` and `windows` crates plus a hand-rolled event handler, which could not be compiled or tested in this sandbox, and shipping untested unsafe FFI in the window bootstrap was the wrong trade. It is replaced by a JavaScript guard in `web/src/main.tsx`, active only when `isTauri()`:
+
+- a capture-phase `click` listener blocks any anchor whose target is outside the bundle (`https://tauri.localhost`, `ipc:`, `about:`, `data:`, `blob:`) and copies the address instead;
+- a `MutationObserver` removes any injected `<base>` element, so relative URLs cannot be re-pointed at another origin;
+- the CSP (`default-src 'self'`, `base-uri 'none'`, `object-src 'none'`) remains the primary boundary; the guard closes the intra-bundle navigation case the CSP cannot see.
 
 Defence in depth that is now in place:
 
