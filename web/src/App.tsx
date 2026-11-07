@@ -294,9 +294,13 @@ const FEEDBACK_URL = import.meta.env.DEV
 // own messages (gateway/src/news.ts); the central feed is fetched directly,
 // like the store. The demo has no gateway and only shows the central feed.
 const NEWS_CONFIG_URL = DEMO_MODE ? null : FEEDBACK_URL.replace(/\/api\/feedback$/, "/api/news");
-const NEWS_FEED_URL = import.meta.env.DEV
-  ? "http://localhost:8080/api/store/news"
-  : import.meta.env.VITE_NEWS_URL || "https://gateway.webspeak3.de/api/store/news";
+// Empty in the desktop build: no central feed exists for Chips (audit in
+// CHIPS-NOTES.md). The news ticker returns before ever reading this.
+const NEWS_FEED_URL = isTauri()
+  ? ""
+  : import.meta.env.DEV
+    ? "http://localhost:8080/api/store/news"
+    : import.meta.env.VITE_NEWS_URL || "https://gateway.webspeak3.de/api/store/news";
 
 // Unlike GATEWAY_URL/FEEDBACK_URL above, the design store is NOT per-instance:
 // it's a single, centrally curated catalog run on the maintainer's own VPS
@@ -307,7 +311,9 @@ const NEWS_FEED_URL = import.meta.env.DEV
 // gateway's STORE_ENABLED=1) can override with VITE_STORE_URL at build time.
 // DEMO_MODE keeps the old same-origin derivation instead, which 404s on the
 // static demo host - the public demo has no write access to the real store.
-const STORE_URL = isTauri() ? `${window.location.origin}/api/store/themes` : import.meta.env.DEV
+// Empty in the desktop build: Chips ships no design store, so there is no URL
+// to fetch even if a future caller forgot the isTauri() guard.
+const STORE_URL = isTauri() ? "" : import.meta.env.DEV
   ? "http://localhost:8080/api/store/themes"
   : DEMO_MODE
     ? `${window.location.protocol}//${window.location.host}/api/store/themes`

@@ -212,8 +212,7 @@
    refraction, when this element got a filter, is appended on the next layer.
    Order matters: the plain blur must survive on its own where url() is
    unsupported or the budget was spent. */
-.ts-app.ts-design-glass :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log)[data-lg],
-.ts-app.ts-design-glass :is(.ts-tree-panel, .ts-info-panel, .ts-chat-tabs, .ts-server-row, .ts-speaking-now)[data-lg] {
+.ts-app.ts-design-glass :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log)[data-lg] {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border-soft);
@@ -234,8 +233,7 @@
 /* The refraction layer. Only present once liquidGlass.ts has assigned a filter
    to this element (Chromium/WebView2 and within the 12-element budget). */
 @supports (backdrop-filter: url(#chips-lg-probe)) {
-  .ts-app.ts-design-glass[data-lg-refract] :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log)[data-lg-filter="on"],
-  .ts-app.ts-design-glass[data-lg-refract] :is(.ts-tree-panel, .ts-info-panel, .ts-chat-tabs, .ts-server-row, .ts-speaking-now)[data-lg-filter="on"] {
+  .ts-app.ts-design-glass[data-lg-refract] :is(.ts-menubar, .ts-toolbar, .ts-upper, .ts-chat-panel, .ts-log)[data-lg-filter="on"] {
     backdrop-filter: var(--lg-filter) blur(var(--glass-blur)) saturate(var(--glass-saturate));
     -webkit-backdrop-filter: var(--lg-filter) blur(var(--glass-blur)) saturate(var(--glass-saturate));
   }
@@ -1089,6 +1087,15 @@
 /* Loading/preview surfaces that used to be pure black boxes. */
 .ts-app.ts-design-glass :is(.ts-banner-panel, .ts-stream-panel video) {
   background: rgba(0, 0, 0, 0.45);
+}
+
+/* Dialogs and menus: the same material, denser tint, and — once the engine has
+   assigned a filter — the same rim refraction. */
+@supports (backdrop-filter: url(#chips-lg-probe)) {
+  .ts-app.ts-design-glass[data-lg-refract] :is(.ts-dialog, .ts-menu)[data-lg-filter="on"] {
+    backdrop-filter: var(--lg-filter) blur(24px) saturate(160%);
+    -webkit-backdrop-filter: var(--lg-filter) blur(24px) saturate(160%);
+  }
 }
 
 /* --- Element-specific upstream boxes that must lose their 2003 look ------ */
