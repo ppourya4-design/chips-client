@@ -52,6 +52,8 @@ export type ClientInfo = {
   hasTalkPower: boolean;
   /** ServerQuery client; hidden in the tree unless the favorite enables them. */
   isQuery?: boolean;
+  /** Client description; carries the `[s:v1;…]` profile style token. */
+  description?: string;
 };
 
 export type WhisperLogEntry = {
@@ -279,6 +281,23 @@ export function applyParkedGatewayEvent(
           talkers: Array.isArray(data.clients) ? (data.clients as number[]) : [],
         },
       };
+    case "clientDescriptionChanged": {
+      // Parked tabs keep the latest profile style too, so switching back to a
+      // tab shows the same plates and rings as a fresh snapshot would.
+      const clientId = Number(data.clientId);
+      if (!Number.isFinite(clientId)) return { labelChanged: false, state };
+      const description = String(data.description ?? "");
+      const patch = (list: ClientInfo[]) =>
+        list.map((c) => (c.id === clientId ? { ...c, description } : c));
+      return {
+        labelChanged: false,
+        state: {
+          ...state,
+          clients: patch(state.clients),
+          previousClients: state.previousClients ? patch(state.previousClients) : null,
+        },
+      };
+    }
     case "poke": {
       const id = Date.now() + Math.floor(Math.random() * 1000);
       return {
