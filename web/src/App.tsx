@@ -2394,9 +2394,9 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
         <div className="ts-dialog-body">
           <p>{t("about.text")}</p>
           <p>
-            <a href="https://webspeak3.de" target="_blank" rel="noreferrer">webspeak3.de</a>
+            <a {...externalLinkProps("https://webspeak3.de")}>webspeak3.de</a>
             {" · "}
-            <a href="https://github.com/WebSpeak3/webspeak3" target="_blank" rel="noreferrer">GitHub</a>
+            <a {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}>GitHub</a>
           </p>
           <figure className="ts-about-memorial">
             <img src={akimoPhoto} alt="Akimo" width={120} height={120} />
@@ -2459,14 +2459,14 @@ function ToSDialog({ mandatory, onAccept, onClose }: { mandatory: boolean; onAcc
             <li>{t("tos.rule3")}</li>
             <li>
               {t("tos.rule4Pre")}
-              <a href="https://webspeak3.de/datenschutz.html" target="_blank" rel="noreferrer">
+              <a {...externalLinkProps("https://webspeak3.de/datenschutz.html")}>
                 {t("tos.privacyLinkText")}
               </a>
               {t("tos.rule4Post")}
             </li>
             <li>
               {t("tos.rule5Pre")}
-              <a href="https://webspeak3.de/impressum.html" target="_blank" rel="noreferrer">
+              <a {...externalLinkProps("https://webspeak3.de/impressum.html")}>
                 {t("tos.legalLinkText")}
               </a>
               {t("tos.rule5Post")}
@@ -3129,7 +3129,7 @@ function NewsTicker() {
         {inApp ? (
           <a href={new URL(url).hash}>{label(item)}</a>
         ) : url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer">
+          <a {...externalLinkProps(url)}>
             {label(item)}
           </a>
         ) : (
@@ -6541,6 +6541,18 @@ function KontoPanel() {
   // Status changes (a push in the background) also move version/lastSync.
   useEffect(() => setAccount(loadSyncAccount()), [status]);
 
+  // Chips ships without upstream's account-sync service (see the no-calls-home
+  // audit in CHIPS-NOTES.md). The panel stays because saved identities and
+  // favourites are still local, but it never offers an account or a request.
+  if (isTauri()) {
+    return (
+      <>
+        <h3>{t("options.section.konto")}</h3>
+        <p className="ts-options-hint">{t("sync.unavailableDesktop")}</p>
+      </>
+    );
+  }
+
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
     setError("");
@@ -6811,6 +6823,23 @@ function AccentSwitcher({
       ))}
     </div>
   );
+}
+
+/** Desktop builds have no browser tab to open, and navigating the Tauri
+ *  WebView away from the app shell would be a network request to a third
+ *  party. So an external link in the desktop app copies its address instead of
+ *  navigating; the web build keeps normal in-page links. */
+function externalLinkProps(href: string) {
+  if (!isTauri()) return { href, target: "_blank", rel: "noreferrer" } as const;
+  return {
+    href: undefined,
+    role: "button",
+    onClick: (event: React.MouseEvent) => {
+      event.preventDefault();
+      void navigator.clipboard?.writeText(href);
+    },
+    title: `${href} (copied)`,
+  } as const;
 }
 
 function ActionIcon({ children }: { children: ReactNode }) {
@@ -7586,7 +7615,9 @@ function DesignPanel({
     }
   };
 
-  if (storeOpen) {
+  // Chips has no design store: the panel and its fetch path are web-only (see
+  // the no-calls-home audit in CHIPS-NOTES.md).
+  if (storeOpen && !isTauri()) {
     return (
       <DesignStorePanel
         customThemes={customThemes}
@@ -7732,7 +7763,7 @@ function DesignPanel({
           style={{ display: "none" }}
           onChange={handleImportSelected}
         />
-        <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>
+        {!isTauri() && <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>}
       </div>
         <h4 className="ts-design-manage-heading">{t("design.iconPack")}</h4>
         {prefs.iconPacks.length === 0 ? (
@@ -7834,7 +7865,7 @@ function DesignPanel({
             </label>
             <div className="ts-design-custom-actions">
               <button onClick={() => setManageOpen(true)}>{t("design.manage")}</button>
-              <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>
+              {!isTauri() && <button onClick={() => setStoreOpen(true)}>{t("design.store.open")}</button>}
             </div>
           </fieldset>
           <fieldset className="ts-options-fieldset">
@@ -12640,7 +12671,7 @@ function AppInner() {
       {DEMO_MODE && (
         <div className="ts-demo-banner">
           Demo mode — simulated data only, no real TeamSpeak server involved.{" "}
-          <a href="https://github.com/WebSpeak3/webspeak3" target="_blank" rel="noreferrer">
+          <a {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}>
             WebSpeak3 project
           </a>
           <button className="ts-demo-mobile-toggle" onClick={() => setDemoForceMobile((v) => !v)}>
@@ -13147,9 +13178,7 @@ function AppInner() {
               </button>
               <a
                 className="ts-menu-item"
-                href="https://github.com/WebSpeak3/webspeak3"
-                target="_blank"
-                rel="noreferrer"
+                {...externalLinkProps("https://github.com/WebSpeak3/webspeak3")}
                 onClick={() => setHelpMenuOpen(false)}
               >
                 <span className="ts-menu-item-icon">🐙</span>
@@ -13157,9 +13186,7 @@ function AppInner() {
               </a>
               <a
                 className="ts-menu-item"
-                href="https://github.com/WebSpeak3/webspeak3/releases"
-                target="_blank"
-                rel="noreferrer"
+                {...externalLinkProps("https://github.com/WebSpeak3/webspeak3/releases")}
                 onClick={() => setHelpMenuOpen(false)}
               >
                 <span className="ts-menu-item-icon">📋</span>
@@ -13167,9 +13194,7 @@ function AppInner() {
               </a>
               <a
                 className="ts-menu-item"
-                href="https://hosted.weblate.org/projects/webspeak3/"
-                target="_blank"
-                rel="noreferrer"
+                {...externalLinkProps("https://hosted.weblate.org/projects/webspeak3/")}
                 onClick={() => setHelpMenuOpen(false)}
               >
                 <span className="ts-menu-item-icon">🌐</span>

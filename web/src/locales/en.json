@@ -1007,5 +1007,6 @@
   "accent.cyan": "Cyan",
   "accent.purple": "Purple",
   "accent.red": "Red",
-  "accent.blue": "Blue"
+  "accent.blue": "Blue",
+  "sync.unavailableDesktop": "Account sync is not part of Chips. Identities, favourites and settings are stored locally on this PC only, and the client never contacts a sync server."
 }
