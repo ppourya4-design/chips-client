@@ -568,15 +568,9 @@ function isDesignTheme(value: string): value is DesignTheme {
   );
 }
 
-function loadDesignTheme(): DesignTheme {
-  const raw = localStorage.getItem(DESIGN_THEME_KEY);
-  if (raw && isDesignTheme(raw)) return raw;
-  return "glass";
-}
-
 function resolveDesignThemeBase(selection: string, customThemes: CustomTheme[]): DesignTheme {
   if (selection.startsWith("custom:")) {
-    // A removed base (e.g. the old GreenTeaSpeak theme) falls back to Standard.
+    // A removed base (e.g. the old GreenTeaSpeak theme) falls back to Liquid Glass.
     const base = customThemes.find((th) => `custom:${th.id}` === selection)?.baseTheme;
     return base && isDesignTheme(base) ? base : "glass";
   }
@@ -624,8 +618,14 @@ function saveCustomThemes(list: CustomTheme[]) {
 
 function loadDesignSelection(): string {
   const raw = localStorage.getItem(DESIGN_SELECTION_KEY);
-  // A removed builtin (e.g. "greenteaspeak") falls back to Liquid Glass.
-  return raw && (raw.startsWith("custom:") || isDesignTheme(raw)) ? raw : loadDesignTheme();
+  if (raw && (raw.startsWith("custom:") || isDesignTheme(raw))) return raw;
+  // Nothing ever picked: an install from before Step 2 only has the resolved
+  // theme key, and its "standard" there was the old implicit default rather
+  // than a choice — that one upgrades to Liquid Glass. An explicitly chosen
+  // Nova/Pulse/IDE (or custom) design is kept.
+  const legacy = localStorage.getItem(DESIGN_THEME_KEY);
+  if (!raw && legacy && isDesignTheme(legacy) && legacy !== "standard") return legacy;
+  return "glass";
 }
 
 function loadBoolPref(key: string, fallback: boolean): boolean {
