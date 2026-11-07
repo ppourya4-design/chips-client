@@ -37,3 +37,7 @@ test('source contracts: sheets, back, accessible pointer/keyboard splitter and n
   assert.match(app, /"ArrowLeft", "ArrowRight", "Home", "End"/);
   assert.match(app, /setChatSheetOpen\(false\)/);
 });
+test('legacy multi-server and auxiliary scroll surfaces cannot restore horizontal scrolling', () => {
+  assert.match(css, /\.gts-connection-tabs \{[^}]*flex-wrap:wrap[^}]*overflow-x:hidden[^}]*overflow-y:auto/);
+  assert.match(css, /\.ts-dialog-body,\.ts-notify-tree,\.chips-profile-editor/);
+});

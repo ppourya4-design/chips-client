@@ -756,9 +756,13 @@ No installed Windows runtime, real device, live server, two-client or manual
 WebView2 verification was performed. Those checks remain necessary on a PC,
 including the minimum-height window, long names/messages and profile-sheet scroll.
 
-Local gates: **45/45 tests passing**, including motion-policy and vector-icon
+Local gates: **46/46 tests passing**, including motion-policy and vector-icon
 policy; production TypeScript/Vite build passes; lint **0 errors / 11 inherited
 warnings**. Windows CI now includes the layout tests. Final-commit Windows build
 and `Chips-win-x64` artifact evidence are linked in the PR and final report, not
 confused with runtime QA. No connector, gateway, tsclientlib, native capability,
 CSP, dependency or lockfile changes. No merge and no Step 7 work.
+
+Final overflow audit also replaces the legacy multi-server tab horizontal scroller with
+wrapped, vertically scrollable tabs (76px cap), and bounds auxiliary profile/notification/
+transfer scrolling horizontally. This adds one source-contract test, not runtime proof.
