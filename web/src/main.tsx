@@ -1,4 +1,5 @@
 import './storageFallback'
+import { isTauri } from '@tauri-apps/api/core'
 import { StrictMode, useState, type FormEvent, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -24,7 +25,7 @@ const root = createRoot(document.getElementById('root')!)
 // and the sync account (Options -> Konto) had its chance to bring in newer data.
 async function start() {
   const { default: App } = await import('./App.tsx')
-  startAutoSync()
+  if (!isTauri()) startAutoSync()
   root.render(
     <StrictMode>
       <App />
@@ -35,6 +36,7 @@ async function start() {
 const dialog = (node: ReactNode) => root.render(<LanguageProvider>{node}</LanguageProvider>)
 
 async function boot() {
+  if (isTauri()) return void start()
   const link = takeSyncLink()
   if (link) return dialog(<SyncLinkDialog link={link} />)
   // Don't hold the client hostage to a slow sync server.

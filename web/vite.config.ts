@@ -67,9 +67,9 @@ export default defineConfig({
       devOptions: { enabled: false },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'WebSpeak3',
-        short_name: 'WebSpeak3',
-        description: 'An independent, self-hosted web client for TeamSpeak 3 servers.',
+        name: 'Chips',
+        short_name: 'Chips',
+        description: 'A desktop client for TeamSpeak and TeaSpeak servers.',
         theme_color: '#03060d',
         background_color: '#03060d',
         display: 'standalone',

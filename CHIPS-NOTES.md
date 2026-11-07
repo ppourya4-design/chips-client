@@ -1,0 +1,111 @@
+# Chips — Step 0 reconnaissance
+
+Recon of fork commit `d2993438351d2ac785a5a7bc70b491a76b2e3865` on 2026-11-06. This is an inventory, not a claim that the Windows desktop app or the live server has been tested. No product code was changed in this step.
+
+## Repository map and data flow
+
+```text
+web/                            React 19 + TypeScript + Vite 8 client
+  src/main.tsx                  entry, unlock/sync dialogs
+  src/App.tsx                   main UI, connection/session handling, most dialogs
+  src/voice.ts, aec3.ts         browser microphone/audio processing
+  src/stream.ts, publish.ts     streaming
+  src/App.css, index.css, styles/ide.css  presentation
+  src/locales/, i18n.tsx        UI translations
+  public/                       icons and static assets
+  scripts/sync-aec3-assets.mjs  copies dependency's AEC3 WASM assets before dev/build
+  vite.config.ts                PWA, build ID, base path
+
+gateway/                        Node.js + TypeScript HTTP/WebSocket server
+  src/index.ts                  static UI, /ws, API, session dispatch and limits
+  src/ts3/connection.ts          spawns connector; translates messages/events
+  src/net.ts                    target/network restrictions
+  src/telemetry.ts              upstream usage ping (enabled by default)
+  src/{news,store,sync}*.ts     ancillary services and optional standalone servers
+
+connector/                      Rust binary `ts-connector`
+  src/main.rs                   CLI, stdin commands, stdout JSON events, TS features
+  Cargo.toml, Cargo.lock        dependencies / locked Rust dependency graph
+
+tsclientlib/                    git submodule, Moepchi/tsclientlib `webspeak3` fork
+  tsclientlib/                  client library, state, resolver and audio
+  tsproto/, utils/              protocol, packet, bookkeeping, declarations crates
+  utils/tsproto-structs/declarations/  nested submodule (protocol declarations)
+
+.github/workflows/              upstream Docker, Safari and release workflows
+Dockerfile, docker-compose.yml  upstream Linux container deployment
+docs/teaspeak.md                upstream TeaSpeak compatibility and limitations
+tests/safari_smoke.py           browser smoke test
+LICENSE                         upstream MIT license
+```
+
+Flow: `web` opens one `/ws` WebSocket per connected server tab. `gateway/src/index.ts` dispatches JSON messages and `gateway/src/ts3/connection.ts` starts **one connector per WebSocket**, passes credentials via environment variables, writes line-based commands to stdin and reads newline-delimited JSON from stdout. `connector/src/main.rs` uses the submodule (including `tsproto` and Opus via `audiopus`) to communicate with the TS/TeaSpeak server. Audio capture/playback is in the browser; audio events pass through this bridge. The gateway also translates fields, validates/limits requests, manages process lifetime, and handles transfer/stream and other messages; it is not simply a static file server. See `README.md` architecture and the source above. TeaSpeak support is not universal: `docs/teaspeak.md` lists unimplemented TeaSpeak features; `wwts.ir:1694` was not tested.
+
+## Toolchains and commands
+
+- Upstream README says Node 20+ and npm; the actual installed Vite 8.1.5 and React plugin require Node `^20.19.0 || >=22.12.0`. Docker uses Node 22; upstream Safari CI uses Node 22. The tested environment here is **Node 22.22.3 / npm 10.9.8 on Linux**. For reproducible Windows CI, Node 22.22.3 is a reasonable candidate exact pin, subject to the Windows build proof.
+- Connector is Rust edition 2021; Docker uses floating `rust:1-bookworm`, README says stable. There is **no exact Rust toolchain pin** in this fork. `connector/Cargo.lock` locks dependencies, not the compiler. Select and test an exact stable Rust version on Windows in Step 1; do not present an untested number as verified.
+- Package manager: npm, separate lockfiles in `web/` and `gateway/`. `npm ci` uses them. Rust uses Cargo with `connector/Cargo.lock` and recursive git submodules. CMake and a C/C++ toolchain are required to build Opus (`audiopus_sys`); on Windows upstream specifies the Visual Studio Desktop C++ workload. Native TLS is also used (`default-tls`; Windows runtime dependencies need checking).
+
+From the repository root, initialize the pinned submodules (verified here):
+
+```sh
+git submodule update --init --recursive
+```
+
+Verified on Linux with the Node/npm versions above:
+
+```sh
+(cd gateway && npm ci && npm run build)       # TypeScript -> gateway/dist
+(cd web && npm ci && npm run build)           # prebuild copies AEC3; tsc -b && vite build
+(cd web && npm run lint)                      # exits 0 with 9 existing warnings
+```
+
+`web` build succeeded despite the Dockerfile's stale warning about existing `tsc` failures; Vite warned about a large chunk. `npm ci` reported 12 web dependency vulnerabilities (3 low, 5 moderate, 4 high) at recon time; gateway reported none. These are audit results, not a security review.
+
+Development start commands verified here, in separate terminals **after building the web bundle**:
+
+```sh
+(cd gateway && TELEMETRY=0 npm run dev)       # http://localhost:8080, /ws
+(cd web && npm run dev)                       # Vite normally http://localhost:5173
+```
+
+Gateway `/healthz`, its built UI `/`, and Vite `/` each returned HTTP 200 locally. Vite's dev build uses `ws://localhost:8080/ws`; the gateway serves the built UI at :8080. PowerShell equivalent of the first command: `cd gateway; $env:TELEMETRY='0'; npm run dev`. These checks did **not** start a connector or establish a voice session. Vite's default host allowlist also rejects the Arena preview host; its dev-mode browser WebSocket points to the browser's localhost, so a remote preview requires both an allowed host and a same-origin proxy/URL strategy.
+
+Upstream's connector commands (documented, **not verified in this sandbox**: Rust/Cargo and CMake are absent; Windows is unavailable):
+
+```sh
+(cd connector && cargo build --locked)
+# If the old Opus CMake policy errors with newer CMake:
+(cd connector && CMAKE_POLICY_VERSION_MINIMUM=3.5 cargo build --locked)
+```
+
+On Windows PowerShell, set `$env:CMAKE_POLICY_VERSION_MINIMUM='3.5'` before `cargo build --locked`. The debug binary is `connector/target/debug/ts-connector[.exe]`; `cargo build --release --locked` is the corresponding release command but has not been verified here either. The gateway's default binary path points at the debug binary; set `CONNECTOR_BIN` for a different location. Docker builds the connector with `CMAKE_POLICY_VERSION_MINIMUM=3.5` and `cargo build --release`, then installs gateway production dependencies and serves the compiled web bundle. Neither Docker nor a Windows installer was built here.
+
+## Connection and existing UI
+
+- `web/src/App.tsx`: `ConnectDialog` (around line 2088) has an editable **server address** input (host and optional `:port` in the same field), nickname, password and expanded identity/channel/server-type options; favorite editor is around line 3516. Initial host state in `AppInner` (around 8766) comes from saved last host or `localhost` (some theme/demo exceptions). `handleConnect` creates a socket and sends connection parameters. `VITE_DEFAULT_SERVER` / runtime `DEFAULT_SERVER` currently trigger **auto-connect**, not merely a prefilled editable field (around 10580); the Chips preset needs different behavior if auto-connect is not intended. The upstream default is not `wwts.ir:1694`.
+- `ChannelTree` (around 1433, rendered around 14449) renders the nested channel/client tree, selection, badges and speaking states. `InfoPanel` (around 1870) renders selected server, client, and channel information. `SpeakingNowBar` (around 1781) renders active/current-channel users. `AvatarTile`, `clientAvatarUrl` and `avatarPath` (around 4550) render/download avatar assets, including in the tree and info panel; avatar files use the server's file-transfer system. Group icons and lists are already represented, but categories and XP/rank semantics are not established by this recon.
+- Client descriptions are **not currently exposed/rendered** in the connector's `ClientInfo` snapshot (`connector/src/main.rs` around 122/753), gateway client mapping, or UI `ClientInfo`/`InfoPanel`. The `description` fields found in the current UI are for other concepts such as permission descriptions and store themes, not client profiles. The protocol declaration submodule contains client description and update fields, but that alone does not establish a usable connector API or live broadcast behavior. The requested Step 4 write/read/live-sync is therefore a potential conflict with the black-box rule: verify actual connector commands, server permissions and update behavior before promising it; do not silently alter the connector or overwrite existing user descriptions.
+- Speaking signals exist: connector emits `talkers`, gateway relays it, UI tracks `talkers` and merges in `selfTalking` into `displayTalkers` (around 10109 and 12510). This is a candidate for talking-reactive styling.
+
+## Desktop packaging assessment and blockers
+
+**Node can potentially be eliminated, but not by configuration alone.** The connector already exposes a process stdin/stdout interface, so a Tauri Rust host could own connector lifecycle and implement the UI-facing bridge in-process, preserving the connector and tsclientlib protocol behavior. This means porting the existing gateway's WebSocket message dispatch, transformations, transfers, security checks, error and multi-session handling (or adapting the UI transport to Tauri IPC), and testing feature/voice parity. Tauri invokes/events must be scoped so untrusted content cannot issue privileged commands. Existing gateway APIs need an explicit disposition rather than being silently lost. This is the preferred route for the no-extra-Node-process/weight rule; feasibility and complete parity are **not yet proven**. Keeping a permanent Node gateway would add an additional process/runtime and conflicts with the stated only-sidecar/weight goal unless explicitly justified and approved; no such justification is established here. One connector per active server tab is upstream behavior even though it is the only *kind* of sidecar.
+
+- `web/src/App.tsx` derives production `/ws` and feedback URLs from `window.location`, and hardcodes localhost for Vite development. A Tauri asset origin is not the gateway HTTP origin; `ws://`/`wss://`, secure-context microphone access, CORS/CSP, WebView2 permissions, origin checks, and mixed-content rules need explicit design/testing. If using loopback, bind only loopback, authenticate/authorize the bridge, avoid fixed-port collisions, and don't expose secrets to other local web pages/processes. `gateway/src/index.ts` currently `server.listen(PORT)` without a bind host, not loopback-only. The Vite PWA/service worker and update polling assume web hosting and require evaluation for Tauri.
+- The gateway assumes a relative development binary path or `CONNECTOR_BIN` (`gateway/src/ts3/connection.ts`); packaged paths, Windows executable naming, startup failure, cleanup and no orphan processes need testing. Credentials in environment/local storage and log exposure need review. WebView2 is system-provided; no Electron or bundled Chromium. Windows prerequisites, sidecar signing/bundling and installer behavior have not been verified.
+- No-calls-home work is required: upstream gateway telemetry is enabled by default (`gateway/src/telemetry.ts`; `TELEMETRY=0` only disables that one path). Frontend defaults point to upstream news/store (`web/src/App.tsx`) and sync (`web/src/sync.ts`); donation and other external links, feedback and release/news requests also need inventory/disablement. Server-configured banners can fetch remote URLs. The connector's `tsclientlib/tsclientlib/src/resolver.rs` performs TeamSpeak nickname lookup against `named.myteamspeak.com` for certain non-dotted addresses and can use SRV/TSDNS/DNS; with an explicit `host:port` it takes the direct DNS path. DNS and necessary connections to the chosen server must be distinguished from analytics/calls home. The black-box rule means any remaining external lookup behavior must be assessed without modifying protocol behavior, not assumed away.
+- Internal names such as `webspeak3-web`, `webspeak3-gateway`, `ts-connector`, `webspeak3:*` storage keys and protocol/asset identifiers remain untouched; blindly renaming them could break references or migration. Visible strings, PWA metadata, icons, window title and app identity will require a separate rebrand. Retain root MIT copyright/license and upstream attribution; submodules and bundled dependencies have their own license notices to preserve.
+
+## Exit status / next-step evidence
+
+Step 0 verifies the web and gateway builds and local HTTP startup only. Connector compilation, an exact Rust pin, Tauri/WebView2, Windows CI, installer, real-server connection and voice are **not verified**. No idle RAM measurement is possible until an actual Windows package exists; measure the full process tree (WebView2, Tauri and connector) in Step 1 and compare honestly. A green Windows Actions installer build would prove a build, **not** connection or voice on a real PC. An unsigned installer is expected to cause a Windows SmartScreen warning. Stop here before Step 1.
+
+## Step 1 — Windows build proof and remaining verification
+
+An initial Chips mark and title, English-only UI, and editable first-use `wwts.ir:1694` address are in place (the last entered address still wins). A Tauri host and desktop bridge have been added, with connector commands and event mapping adapted from the upstream gateway; the connector and tsclientlib remain unchanged. The bridge uses one connector process per session and no Node process. Unit tests cover event mapping, command order, validation, and closing while spawn is pending. These tests use a fake process, **not** a real connector or voice session. The UI build passes on Linux.
+
+The Windows workflow pins Node 22.22.3 and Rust 1.93.1, builds the unchanged connector with its lockfile, and builds an unsigned NSIS installer. GitHub Actions run [42282409728](https://github.com/ppourya4-design/chips-client/actions/runs/42282409728) succeeded for commit `590a0297e3f74b989130ad68ed14554cceaf5bdc`; its non-expired `Chips-win-x64` artifact is 6,605,872 bytes (compressed artifact size, not installed size). Four bridge unit tests and the connector build passed on the Windows runner. The Tauri Cargo dependencies are not yet locked in a committed Cargo.lock, so reproducibility of future builds remains to be addressed. Desktop sync/news are disabled and a restrictive desktop CSP is configured, but the complete no-calls-home audit and runtime verification are still required. The desktop bridge rejects bare server nicknames that would trigger the connector's TeamSpeak nickname lookup; direct host/IP input remains editable. The system DNS resolver may still be involved. Legacy stock animations and shadows are disabled as an interim safety baseline, not the Step 2/3 design.
+
+The requested CI build exit proof exists, but it does not establish runtime correctness. Still verify the installed executable and sidecar paths, audit external traffic and visible branding, and test on a real Windows PC for microphone permission, connect/voice and process cleanup. Idle RAM has **not** been measured: this Linux sandbox cannot install and run the Windows app. Measure the full Windows process tree before judging its weight against TeamSpeak 3. CI proves the build, not voice; the unsigned installer may trigger SmartScreen. No Step 2 work has started.

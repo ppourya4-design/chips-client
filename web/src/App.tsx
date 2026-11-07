@@ -126,7 +126,10 @@ import {
   pickAudioOutputDevice,
 } from "./voice";
 import { createAec3, type Aec3Instance } from "./aec3";
-import { LanguageProvider, useLanguage, useT, type LangPref } from "./i18n";
+import { isTauri } from "@tauri-apps/api/core";
+import { DesktopSocket } from "./desktop/socket";
+import { spawnConnector } from "./desktop/native";
+import { LanguageProvider, useT } from "./i18n";
 import {
   StreamAccess,
   StreamMode,
@@ -293,7 +296,7 @@ const NEWS_FEED_URL = import.meta.env.DEV
 // gateway's STORE_ENABLED=1) can override with VITE_STORE_URL at build time.
 // DEMO_MODE keeps the old same-origin derivation instead, which 404s on the
 // static demo host - the public demo has no write access to the real store.
-const STORE_URL = import.meta.env.DEV
+const STORE_URL = isTauri() ? `${window.location.origin}/api/store/themes` : import.meta.env.DEV
   ? "http://localhost:8080/api/store/themes"
   : DEMO_MODE
     ? `${window.location.protocol}//${window.location.host}/api/store/themes`
@@ -304,7 +307,7 @@ const STORE_URL = import.meta.env.DEV
 // every build, the Docker image included. Self-hosters who would rather not
 // carry someone else's donation link can build with VITE_DONATE_URL= (empty)
 // to drop the button, or point it somewhere else.
-const DONATE_URL = import.meta.env.VITE_DONATE_URL ?? "https://ko-fi.com/moepchi";
+const DONATE_URL = isTauri() ? "" : (import.meta.env.VITE_DONATE_URL ?? "https://ko-fi.com/moepchi");
 
 // This file's frontend is deployed as multiple Cloudflare Pages projects
 // from the same repo/build (see mem:deployment) - only the maintainer's own
@@ -2343,7 +2346,7 @@ function ConnectDialog({
     <div className="ts-dialog-backdrop" {...backdrop}>
       <div className="ts-connect-nova-wrap">
         <div className="ts-connect-nova-hero">
-          <span className="ts-connect-nova-logo">W</span>
+          <span className="ts-connect-nova-logo">C</span>
           <div className="ts-connect-nova-heading">
             <div className="ts-connect-nova-title">{t("connect.title")}</div>
             <div className="ts-connect-nova-subtitle">{t("connect.novaSubtitle")}</div>
@@ -3067,6 +3070,7 @@ function NewsTicker() {
   });
 
   useEffect(() => {
+    if (isTauri()) return;
     const getJson = async (url: string) => {
       const res = await fetch(url);
       if (!res.ok) throw new Error(String(res.status));
@@ -6412,7 +6416,6 @@ function AnwendungPanel({
   onChatImagesChange: (on: boolean) => void;
 }) {
   const t = useT();
-  const { langPref, setLangPref } = useLanguage();
   const [settings, setSettings] = useState(loadAppSettings);
   const check = (key: keyof AppSettings) => (
     <label className="ts-options-checkbox">
@@ -6461,23 +6464,6 @@ function AnwendungPanel({
           </fieldset>
         </div>
         <div className="ts-options-fields">
-          <label className="ts-options-field">
-            {t("app.language")}
-            <select value={langPref} onChange={(e) => setLangPref(e.target.value as LangPref)}>
-              <option value="auto">{t("app.language.auto")}</option>
-              <option value="de">{t("app.language.de")}</option>
-              <option value="en">{t("app.language.en")}</option>
-              <option value="zh-CN">{t("app.language.zh-CN")}</option>
-              <option value="fa">{t("app.language.fa")}</option>
-              <option value="cs-CZ">{t("app.language.cs-CZ")}</option>
-              <option value="ru">{t("app.language.ru")}</option>
-            </select>
-          </label>
-          <p className="ts-options-hint">
-            <a href="https://hosted.weblate.org/projects/webspeak3/" target="_blank" rel="noreferrer">
-              {t("app.language.helpTranslate")}
-            </a>
-          </p>
           <fieldset className="ts-options-fieldset">
             <legend>{t("app.group.privacy")}</legend>
             <label className="ts-options-checkbox">
@@ -8763,7 +8749,7 @@ function AppInner() {
   const [host, setHost] = useState(
     () =>
       localStorage.getItem(LAST_HOST_KEY) ??
-      (DEMO_MODE ? DEMO_HOST : loadDesignTheme() === "nova" ? "" : "localhost")
+      (DEMO_MODE ? DEMO_HOST : "wwts.ir:1694")
   );
   const [nickname, setNickname] = useState(
     () => localStorage.getItem(LAST_NICKNAME_KEY) ?? (DEMO_MODE ? "Guest" : "")
@@ -9179,7 +9165,7 @@ function AppInner() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  const socketRef = useRef<WebSocket | DemoSocket | null>(null);
+  const socketRef = useRef<WebSocket | DemoSocket | DesktopSocket | null>(null);
   /** Multi-join: one gateway WebSocket (+ connector) per session tab. */
   const [sessionTabs, setSessionTabs] = useState<SessionTabInfo[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -9756,7 +9742,7 @@ function AppInner() {
     target.parked = null;
     applyParkedToUi(parked);
     resetPerServerCaches();
-    socketRef.current = target.socket as WebSocket | DemoSocket | null;
+    socketRef.current = target.socket as WebSocket | DemoSocket | DesktopSocket | null;
     activeSessionIdRef.current = id;
     setActiveSessionId(id);
     updateTabMeta(id, {
@@ -9811,7 +9797,7 @@ function AppInner() {
       nextRec.parked = null;
       applyParkedToUi(parked);
       resetPerServerCaches();
-      socketRef.current = nextRec.socket as WebSocket | DemoSocket | null;
+      socketRef.current = nextRec.socket as WebSocket | DemoSocket | DesktopSocket | null;
       activeSessionIdRef.current = nextId;
       setActiveSessionId(nextId);
       if (parked.micWasOn) void startMic();
@@ -9832,7 +9818,7 @@ function AppInner() {
   // Rebuilt every render and only ever called through socketHandlersRef, so
   // a long-lived socket always sees current state (clients, contacts, t,
   // mic settings, ...) instead of whatever existed when it connected.
-  const socketHandlers = (sessionId: string, socket: WebSocket | DemoSocket, params: ConnectParams) => {
+  const socketHandlers = (sessionId: string, socket: WebSocket | DemoSocket | DesktopSocket, params: ConnectParams) => {
     const connectHost = params.host;
     const connectNickname = params.nickname;
     const connectServerPassword = params.serverPassword;
@@ -10480,7 +10466,7 @@ function AppInner() {
   const socketHandlersRef = useRef(socketHandlers);
   socketHandlersRef.current = socketHandlers;
 
-  const wireSocket = (sessionId: string, socket: WebSocket | DemoSocket, params: ConnectParams) => {
+  const wireSocket = (sessionId: string, socket: WebSocket | DemoSocket | DesktopSocket, params: ConnectParams) => {
     const current = () => socketHandlersRef.current(sessionId, socket, params);
     let watchdog: ReturnType<typeof setTimeout> | undefined;
     socket.onopen = () => current().onopen();
@@ -10554,7 +10540,7 @@ function AppInner() {
     const sessionId = randomId();
     sessionParamsRef.current.set(sessionId, params);
 
-    const socket = DEMO_MODE ? new DemoSocket() : new WebSocket(GATEWAY_URL);
+    const socket = DEMO_MODE ? new DemoSocket() : isTauri() ? new DesktopSocket(spawnConnector) : new WebSocket(GATEWAY_URL);
     sessionsRef.current.set(sessionId, { id: sessionId, socket, parked: null });
     socketRef.current = socket;
     activeSessionIdRef.current = sessionId;
@@ -10632,7 +10618,7 @@ function AppInner() {
     }
 
     logClient("info", "Connection", `Reconnecting to ${params.host}…`);
-    const socket = DEMO_MODE ? new DemoSocket() : new WebSocket(GATEWAY_URL);
+    const socket = DEMO_MODE ? new DemoSocket() : isTauri() ? new DesktopSocket(spawnConnector) : new WebSocket(GATEWAY_URL);
     rec.socket = socket;
     if (sessionId === activeSessionIdRef.current) {
       socketRef.current = socket;
@@ -11115,7 +11101,7 @@ function AppInner() {
   // Tell the connector whose whispers to let through: the mode's default plus
   // the online clients whose contact entry says otherwise. Resent whenever
   // that changes or the socket is new (the connector forgets it on reconnect).
-  const sentWhisperPolicyRef = useRef<{ socket: WebSocket | DemoSocket | null; payload: string }>({ socket: null, payload: "" });
+  const sentWhisperPolicyRef = useRef<{ socket: WebSocket | DemoSocket | DesktopSocket | null; payload: string }>({ socket: null, payload: "" });
   useEffect(() => {
     const socket = socketRef.current;
     // Older gateways answer unknown messages with an error line.
@@ -12352,7 +12338,7 @@ function AppInner() {
   }, [transferToast]);
 
   // Bandwidth caps are enforced by the connector; resend for every new connection.
-  const sentTransferLimitRef = useRef<{ socket: WebSocket | DemoSocket | null; payload: string }>({
+  const sentTransferLimitRef = useRef<{ socket: WebSocket | DemoSocket | DesktopSocket | null; payload: string }>({
     socket: null,
     payload: "",
   });
@@ -12589,7 +12575,7 @@ function AppInner() {
         <div className="ts-demo-banner">
           Demo mode — simulated data only, no real TeamSpeak server involved.{" "}
           <a href="https://github.com/WebSpeak3/webspeak3" target="_blank" rel="noreferrer">
-            Get WebSpeak3
+            WebSpeak3 project
           </a>
           <button className="ts-demo-mobile-toggle" onClick={() => setDemoForceMobile((v) => !v)}>
             {demoForceMobile ? "🖥 Desktop view" : "📱 Mobile view"}
@@ -13143,8 +13129,8 @@ function AppInner() {
         </div>
         {designTheme === "nova" && (
           <div className="ts-nova-topbar-server">
-            <span className="ts-nova-topbar-logo">W</span>
-            <span className="ts-nova-topbar-name">{connected ? serverName || host : "WebSpeak3"}</span>
+            <span className="ts-nova-topbar-logo">C</span>
+            <span className="ts-nova-topbar-name">{connected ? serverName || host : "Chips"}</span>
             <span className={`ts-nova-topbar-status${connected ? " ts-nova-topbar-status-on" : ""}`}>
               <span className="ts-nova-topbar-dot" />
               {connected ? t("design.status.connected") : t("tree.notConnected")}
@@ -13399,8 +13385,8 @@ function AppInner() {
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
-          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="ts-app-logo" />
-          <span className="ts-app-title" role="heading" aria-level={1}>WebSpeak3</span>
+          <img src={`${import.meta.env.BASE_URL}chips-mark.png`} alt="" className="ts-app-logo" />
+          <span className="ts-app-title" role="heading" aria-level={1}>Chips</span>
         </div>
 
       </div>
@@ -13998,7 +13984,7 @@ function AppInner() {
 
       {streamSettingsOpen && (
         <StreamSettingsDialog
-          ownName={ownClient?.name ?? "WebSpeak3"}
+          ownName={ownClient?.name ?? "Chips"}
           onStart={handleStartPublishing}
           onCancel={() => setStreamSettingsOpen(false)}
         />

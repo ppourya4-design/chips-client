@@ -67,7 +67,8 @@ const LanguageContext = createContext<{ lang: Lang; langPref: LangPref; setLangP
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [langPref, setLangPrefState] = useState<LangPref>(() => loadLangPref());
-  const lang = resolveLang(langPref);
+  // Chips has one interface language; user-generated Persian text remains unchanged.
+  const lang: Lang = "en";
 
   useEffect(() => {
     saveLangPref(langPref);

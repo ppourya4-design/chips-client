@@ -20,3 +20,12 @@ body {
 #root {
   height: 100vh;
 }
+
+/* Chips interim safety baseline: no animated movement or glowing shadows.
+   Later design steps can replace this with explicitly approved light-only effects. */
+*, *::before, *::after {
+  animation: none !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}

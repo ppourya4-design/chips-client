@@ -1,3 +1,4 @@
+import { isTauri } from "@tauri-apps/api/core";
 // Options -> Konto: Mullvad-style account sync. A random 16-digit account number
 // (+ an optional random password) is all there is. Both derive, on this device,
 // the account id the server files the data under, the AES key and the auth
@@ -235,6 +236,7 @@ export const syncErrorKey = (err: unknown) => {
 };
 
 async function call(server: string, path: string, init: RequestInit = {}, auth?: string) {
+  if (isTauri()) throw new Error("Sync is unavailable in Chips");
   let res: Response;
   try {
     res = await fetch(`${server.replace(/\/$/, "")}${path}`, {

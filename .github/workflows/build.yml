@@ -1,0 +1,64 @@
+name: Build Chips for Windows
+on:
+  push:
+    branches: ["arena/4e30479e-chips-client", "main"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+    steps:
+      - name: Check out sources and submodules
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          submodules: recursive
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22.22.3'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            gateway/package-lock.json
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.93.1'
+          targets: x86_64-pc-windows-msvc
+      - name: Install dependencies and test bridge
+        shell: pwsh
+        run: |
+          npm ci --prefix gateway
+          npm ci --prefix web
+          & ./gateway/node_modules/.bin/tsx.cmd --test web/tests/desktop-bridge.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build unchanged connector
+        working-directory: connector
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+      - name: Stage connector sidecar
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force web/src-tauri/binaries | Out-Null
+          Copy-Item connector/target/x86_64-pc-windows-msvc/release/ts-connector.exe web/src-tauri/binaries/ts-connector-x86_64-pc-windows-msvc.exe
+      - name: Build installer
+        working-directory: web
+        shell: pwsh
+        run: |
+          cmd /c "npx tauri build --target x86_64-pc-windows-msvc --bundles nsis > tauri-build.log 2>&1"
+          $result = $LASTEXITCODE
+          Get-Content tauri-build.log
+          if ($result -ne 0) {
+            $summary = ((Get-Content tauri-build.log -Tail 60) -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error::$summary"
+            exit $result
+          }
+      - name: Upload installer
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: Chips-win-x64
+          path: web/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          if-no-files-found: error
