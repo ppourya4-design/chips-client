@@ -709,3 +709,60 @@ still require a Windows PC; mocked DSP tests are not acoustic testing. No Step 7
 or merge has been performed.
 
 The final vector sweep also replaces legacy disclosure chevrons, stepper minus, unread-dot and back-arrow glyphs with SVGs; a dedicated guard covers these non-emoji control icons.
+
+## Step 6.5 — responsive desktop window (not Step 7)
+
+The final `window-layout.css` is the layout authority after all selectable designs.
+At **760 CSS px and above**, tree and chat are side by side. Below **760px**,
+chat is hidden, not stacked below the tree. This threshold reserves a usable
+240px minimum tree plus at least 400px for chat and chrome when wide. Native
+Tauri minimum is now **360 × 560**, down from 800 × 560 so narrow mode is
+actually reachable. The 1200 × 760 default is unchanged.
+
+State model: viewport-derived `wide | narrow`; transient `chatSheetOpen`;
+existing active chat tab/thread retained independently. Any window resize resets
+the sheet flag, so shrinking always returns to the tree and widening always
+restores side-by-side chat. Open channel chat and existing private-chat actions
+open the sheet in narrow mode. Back to channels / Escape dismiss it, without
+losing messages/draft/tab. Back receives focus on opening; the channel-chat
+button receives focus on Back. The sheet occupies the body only, leaving the
+self-bar accessible. Profile cards remain floating when wide and become full
+viewport-height, vertically scrolling sheets below 760px. No position animation
+or new effect layer is introduced.
+
+Tree width persists as `chips:tree-width` in localStorage (240–500px, default
+280px); malformed values and unavailable storage have safe fallbacks. The
+rendered width is additionally bounded to viewport minus 400px without overwriting
+the preferred width on resize. Narrow mode uses the full tree width. The splitter
+supports captured pointer drags (including touch/pen), arrow keys in 16px steps,
+Home/End, focus indication, and separator ARIA values. No new dependency.
+The self-bar uses four fixed 36px controls: mute, deafen, explicitly disabled
+screen-share placeholder, settings; the name ellipsizes before controls shrink.
+Horizontal overflow is suppressed at the root and pane boundaries, long chat
+content wraps, and tree labels truncate; vertical scrolling stays within panes.
+The old separate info column is hidden in this layout; identity rows retain the
+Step 4 profile-card path. `.chipstheme` remains the Step 7 placeholder.
+
+### Width-matrix QA (honest scope)
+
+Exercised **360, 400, 480, 600, 759, 760, 800, 1024, 1200, 1600px** with
+Node unit/source tests, **not a browser/DOM layout engine or manual dragging**.
+For each width: checked mode selection, 240px tree floor for saved widths
+240/280/500, wide-mode chat/chrome reserve, and the self-bar fixed-control width
+budget. Also tested persisted reload, malformed/blocked storage, and source
+contracts for sheet/back, pointer capture, keyboard splitter and no new animation.
+These checks do not prove computed geometry, scrollbar absence or visual quality.
+No installed Windows runtime, real device, live server, two-client or manual
+WebView2 verification was performed. Those checks remain necessary on a PC,
+including the minimum-height window, long names/messages and profile-sheet scroll.
+
+Local gates: **46/46 tests passing**, including motion-policy and vector-icon
+policy; production TypeScript/Vite build passes; lint **0 errors / 11 inherited
+warnings**. Windows CI now includes the layout tests. Final-commit Windows build
+and `Chips-win-x64` artifact evidence are linked in the PR and final report, not
+confused with runtime QA. No connector, gateway, tsclientlib, native capability,
+CSP, dependency or lockfile changes. No merge and no Step 7 work.
+
+Final overflow audit also replaces the legacy multi-server tab horizontal scroller with
+wrapped, vertically scrollable tabs (76px cap), and bounds auxiliary profile/notification/
+transfer scrolling horizontally. This adds one source-contract test, not runtime proof.

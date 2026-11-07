@@ -13,7 +13,7 @@
         "title": "Chips",
         "width": 1200,
         "height": 760,
-        "minWidth": 800,
+        "minWidth": 360,
         "minHeight": 560,
         "useHttpsScheme": true
       }
