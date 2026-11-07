@@ -968,6 +968,129 @@
   outline-offset: 1px;
 }
 
+/* --- Sliders: a glass groove with an accent thumb ------------------------ */
+
+.ts-app.ts-design-glass :is(.ts-icon-slider, .ts-toolbar-fields) input[type="range"],
+.ts-app.ts-design-glass .ts-menu-volume input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: var(--pill-radius);
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 0 rgba(0, 0, 0, 0.3);
+}
+
+.ts-app.ts-design-glass :is(.ts-icon-slider, .ts-toolbar-fields) input[type="range"]::-webkit-slider-thumb,
+.ts-app.ts-design-glass .ts-menu-volume input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--pill-radius);
+  background: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.ts-app.ts-design-glass :is(.ts-icon-slider, .ts-toolbar-fields) input[type="range"]:hover::-webkit-slider-thumb {
+  background: var(--primary);
+  transform: scale(1.08);
+}
+
+.ts-app.ts-design-glass .ts-icon-slider {
+  color: var(--text-muted);
+  gap: 0.45rem;
+}
+
+/* --- Connection tabs: a second floating pill strip ----------------------- */
+
+.ts-app.ts-design-glass .gts-connection-tabs {
+  height: auto;
+  min-height: 0;
+  gap: 0.25rem;
+  padding: 0.22rem;
+  margin: 0 0 2px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--pill-radius);
+  overflow-x: auto;
+}
+
+.ts-app.ts-design-glass .gts-connection-tab {
+  height: auto;
+  max-width: 280px;
+  padding: 0.22rem 0.4rem 0.22rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--pill-radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.ts-app.ts-design-glass .gts-connection-tab:hover:not(.gts-connection-tab-active) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.ts-app.ts-design-glass .gts-connection-tab-active {
+  background: rgba(var(--primary-rgb), 0.15);
+  border-color: rgba(var(--primary-rgb), 0.38);
+  color: var(--primary);
+}
+
+.ts-app.ts-design-glass .gts-connection-tab-connecting {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ts-app.ts-design-glass .gts-connection-tab-close {
+  border-radius: var(--pill-radius);
+  transition: background-color 140ms ease, opacity 140ms ease;
+}
+
+.ts-app.ts-design-glass .gts-connection-tab-close:hover {
+  background: var(--surface-hover);
+}
+
+/* --- Disconnected state: one quiet, floating invitation ------------------ */
+
+.ts-app.ts-design-glass .ts-tree-panel > .ts-tree-empty {
+  margin: 0.5rem;
+  padding: 1.1rem;
+  border: 1px dashed var(--border-soft);
+  border-radius: 14px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* --- Badges and small marks --------------------------------------------- */
+
+.ts-app.ts-design-glass :is(.ts-chat-tab-unread, .ts-unread-badge) {
+  color: var(--primary);
+}
+
+.ts-app.ts-design-glass .ts-poke-button {
+  border-radius: var(--pill-radius);
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.ts-app.ts-design-glass .ts-tree-drop-target,
+.ts-app.ts-design-glass .ts-channel-row.ts-drop-target {
+  background: rgba(var(--primary-rgb), 0.12);
+  border-color: rgba(var(--primary-rgb), 0.5);
+  outline: none;
+}
+
+/* Loading/preview surfaces that used to be pure black boxes. */
+.ts-app.ts-design-glass :is(.ts-banner-panel, .ts-stream-panel video) {
+  background: rgba(0, 0, 0, 0.45);
+}
+
 /* --- Element-specific upstream boxes that must lose their 2003 look ------ */
 
 .ts-app.ts-design-glass .ts-alpha-badge {
