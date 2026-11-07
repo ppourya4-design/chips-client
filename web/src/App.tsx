@@ -30,7 +30,11 @@ import {
   namePlateAttributes,
   saveReduceMotion,
   type NameStyleConfig,
+  saveNameStyleConfig,
+  NAME_STYLES,
+  AVATAR_RINGS,
 } from "./nameEffects";
+import { loadProfileStyle, saveProfileStyle, exportStylesJson, importStylesJson, type ProfileStyle } from "./profileStyle";
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -4666,6 +4670,12 @@ function clientAvatarUrl(client: ClientInfo, images: Record<string, string>): st
  *  `speaking` is the existing voice-activity signal (the talkers set). Only the
  *  Talking-reactive style reacts to it, and it only cross-fades a light layer:
  *  the letters never move. See styles/name-effects.css for the motion law. */
+function ProfileStyleEditor({ value, onChange, onClose }: { value: ProfileStyle; onChange: (v: ProfileStyle) => void; onClose: () => void }) {
+  const setName = (patch: Partial<NameStyleConfig>) => onChange({...value,name:{...value.name,...patch}});
+  const file = (text: string) => { const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download="styles.json"; a.click(); URL.revokeObjectURL(a.href); };
+  return <div className="ts-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section role="dialog" aria-modal="true" aria-label="Profile style" className="ts-modal" style={{maxWidth:680,padding:24}}><button style={{float:"right"}} onClick={onClose}>Close</button><h2>Profile style</h2><div style={{padding:18,borderRadius:16,color:"white",background:`linear-gradient(${value.direction}deg,${value.card.join(",")})`}}><div style={{height:82,borderRadius:12,background:`linear-gradient(${value.direction}deg,${value.banner.join(",")})`}}/><div style={{marginTop:12}}><NamePlate text="Your name" premium/><div>Custom status · Rank · Current channel</div></div></div><p>Name effect <select value={value.name.style} onChange={e=>setName({style:e.target.value as NameStyleConfig["style"]})}>{NAME_STYLES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select></p>{[0,1].map(i=><label key={i}>Name color {i+1}<input type="color" value={value.name.colors[i]||"#74e5ff"} onChange={e=>{const colors=[...value.name.colors];colors[i]=e.target.value;setName({colors});}}/></label>)}<p>Avatar ring <select value={value.ring} onChange={e=>onChange({...value,ring:e.target.value as ProfileStyle["ring"]})}>{AVATAR_RINGS.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select> <label><input type="checkbox" checked={value.talk} onChange={e=>onChange({...value,talk:e.target.checked})}/> Talking reactive</label></p><p>Banner <input type="color" value={value.banner[0]} onChange={e=>onChange({...value,banner:[e.target.value,...value.banner.slice(1)]})}/><input type="color" value={value.banner[1]||"#a74cfd"} onChange={e=>onChange({...value,banner:[value.banner[0],e.target.value,...value.banner.slice(2)]})}/> <button onClick={()=>onChange({...value,banner:[...value.banner,"#ffcc66"].slice(0,3)})}>Add stop</button> Direction <input type="range" min="0" max="359" value={value.direction} onChange={e=>onChange({...value,direction:+e.target.value})}/></p><p>Card colors <input type="color" value={value.card[0]} onChange={e=>onChange({...value,card:[e.target.value,value.card[1]]})}/><input type="color" value={value.card[1]} onChange={e=>onChange({...value,card:[value.card[0],e.target.value]})}/></p><button onClick={()=>file(exportStylesJson())}>Export styles.json</button> <label>Import styles.json <input type="file" accept="application/json" onChange={async e=>{const f=e.target.files?.[0];if(f)try{onChange(importStylesJson(await f.text()));}catch{alert("Invalid styles.json");}}}/></label></section></div>;
+}
+
 function NamePlate({
   text,
   premium = false,
@@ -12796,7 +12806,10 @@ function AppInner() {
   // Step 3. The name style is read from localStorage today (Shimmer Gradient by
   // default); Step 4's customization panel will add the setter and the profile
   // card, both of which only need this same NameStyleConfig.
-  const [nameStyle] = useState<NameStyleConfig>(loadNameStyleConfig);
+  const [nameStyle, setNameStyle] = useState<NameStyleConfig>(loadNameStyleConfig);
+  const [profileStyle, setProfileStyle] = useState<ProfileStyle>(loadProfileStyle);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const updateProfile = (next: ProfileStyle) => { setProfileStyle(next); saveProfileStyle(next); setNameStyle(next.name); saveNameStyleConfig(next.name); };
   // "Reduce animations": the in-app switch, on top of the OS preference that the
   // stylesheet already honours. Freezes every Step 3 effect to a static gradient.
   const [reduceMotion, setReduceMotion] = useState<boolean>(loadReduceMotion);
@@ -13304,6 +13317,7 @@ function AppInner() {
             </div>
           )}
         </div>
+        <button type="button" className="ts-menubar-item ts-plain-button" onClick={() => setProfileEditorOpen(true)}>✨ Profile style</button>
         {IS_OWN_HOSTED_INSTANCE && (
           <button
             type="button"
@@ -13981,6 +13995,7 @@ function AppInner() {
         />
       )}
 
+      {profileEditorOpen && <ProfileStyleEditor value={profileStyle} onChange={updateProfile} onClose={() => setProfileEditorOpen(false)} />}
       {optionsDialogOpen && (
         <OptionsDialog
           onOpenWhisperLists={() => setWhisperListsOpen(true)}
