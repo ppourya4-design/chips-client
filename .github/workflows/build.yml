@@ -1,7 +1,9 @@
 name: Build Chips for Windows
 on:
   push:
-    branches: ["arena/4e30479e-chips-client", "main"]
+    # main plus every arena/* work branch, so a step's branch gets its own
+    # Windows build without editing this file each time.
+    branches: ["main", "arena/*"]
   workflow_dispatch:
 permissions:
   contents: read
