@@ -556,3 +556,154 @@ Final honesty pass: light/dark is shown only for the built-in Standard layout (t
 built-ins deliberately use fixed dark palettes), and glass intensity is shown only for the
 built-in Liquid Glass layout. Both choices are retained while using another layout, but no
 ineffective control is displayed there. This visibility rule is covered by the 18th test.
+
+## Step 6 owner follow-up — comprehensive coverage, DSP and vector icons
+
+This section **supersedes the earlier Step 6 completion claim**. The follow-up audit expanded
+coverage rather than treating the first six-section UI as the endpoint. The hub still has the
+same six sections; there is no Step 7 theme-file work and no merge.
+
+### Additions and corrected consolidation map
+
+- **Audio → Per-speaker volume:** the connector's existing `setClientVolume`/`clientvolume`
+  gain control is now available for each connected speaker, with individual and all-saved
+  resets. Values retain their existing UID-keyed persistence and replay on reconnect. The
+  context menu now opens Audio settings instead of hiding a separate slider.
+- **Audio → Capture setup:** enabling the microphone for setup/testing is available directly
+  in the hub, including before connecting. **Playback** also regains the existing native
+  output-device picker, only when `selectAudioOutput` is supported; it uses the same saved
+  device and voice/sound routes as the dropdown. No fake device-control API was added.
+- **Audio → Broadcast defaults:** the existing TS6 P2P setup dialog is a hub child. Resolution,
+  FPS, bitrates, source, source-audio, privacy, viewer limit and content hint persist in
+  `chips:broadcast-defaults`. The toolbar routes setup through this same hub. Opening setup
+  does not acquire media; Go live requires a connection and explicit user action. The
+  unimplemented SFU choice is hidden (text explains P2P-only); camera mode hides the
+  inapplicable shared-source-audio switch. This remains upstream's alpha streaming feature,
+  not a claim of server compatibility or live verification.
+- **Connection → Contacts and per-contact whisper policy:** the existing contact editor is
+  now a hub child rather than a top-menu settings surface. Local names/categories, ignore
+  policy and whisper overrides remain saved in the existing contact store. Its phonetic
+  speech field was removed because no speech engine consumes it. Dynamic contact names and
+  other user content are not rewritten by the icon cleanup.
+- **Appearance → Vector icon packs:** import/delete is reachable independently of the hidden
+  legacy theme manager. Existing `.ts3_iconpack`/ZIP parsing/storage/selection are reused,
+  restricted to SVG UI assets. Raster-only imports are rejected with an explanation; saved
+  raster entries no longer override the built-in vector icons (they are preserved in storage,
+  so there is no destructive migration). No `.chipstheme` parser/import/export was added.
+- **Hotkeys:** all six actions supported by the app's key handling are now editable:
+  **mute, deafen, PTT, Open Connect, Disconnect current session, Save server preset**. The last
+  three replace previously fixed Ctrl+S/D/B shortcuts. Every action has capture and Clear;
+  exact modifier chords, bare modifiers (captured on release), and legacy unmodified saves
+  are supported. PTT also supports its existing middle/side mouse buttons. All six share one
+  conflict check, and cleared PTT now removes its storage key (previously it could reappear
+  after restart). Explicit nulls in `chips:action-shortcuts` preserve cleared defaults.
+  Shortcuts never become global OS hooks: dialog/typing/repeat guards remain, and PTT releases
+  on key/modifier release, blur or binding change. Tree/menu navigation and chat Enter/Shift+
+  Enter are widget accessibility semantics, not separately bindable actions in this stack.
+
+### Explicit Audio DSP inventory
+
+Code evidence: `web/src/voice.ts` (`MicCaptureOptions`, `MicCapture.start`, PCM callback,
+`noteTyping`, `AudioPlayer.setVolume/setAutoVolume`), `web/src/aec3.ts`, and
+`web/src/desktop/connection.ts::setClientVolume`. **No connector DSP options were invented.**
+
+| DSP / audio processing | Exists in this Tauri build? | Working hub control / engine |
+|---|---|---|
+| Noise suppression | **Yes**, requested from WebView2's media capture engine | Audio → Capture → Noise suppression; persisted native `getUserMedia({audio:{noiseSuppression}})` constraint; active capture restarts with the new request. Hidden if the runtime does not advertise this constraint. |
+| Native echo cancellation | **Yes** | Audio → Capture → Echo cancellation; persisted WebRTC/WebView2 `getUserMedia.echoCancellation`. Disabled while AEC3 is active to avoid stacking two cancellers. Hidden if unsupported by the runtime. |
+| Capture automatic gain control | **Yes** | Audio → Capture → Automatic gain control; persisted WebRTC/WebView2 `getUserMedia.autoGainControl`, independent of native AEC/noise suppression. Hidden if unsupported. |
+| AEC3 echo cancellation | **Yes**, already bundled | Audio → Capture → AEC3 toggle; Google WebRTC AEC3 WASM via existing `@ennuicastr/webrtcaec3.js`. Receives the post-gain playback reference and processes capture before VAD/PCM encoding; native AEC is switched off while used. No new package/download/service. |
+| Voice-activation detection | **Yes** | Audio → Capture → Voice activation, sensitivity threshold and hangover delay; local PCM RMS comparison and hangover in `MicCapture`, **not** a neural VAD or connector option. Both scalar preferences persist. PTT/continuous are the existing alternative transmission modes. |
+| Typing attenuation | **Yes** | Audio → Capture → Typing attenuation toggle; local `MicCapture.noteTyping()` applies a fixed 0.1 amplitude for approximately 0.2 s after typing. Not claimed as neural keyboard-noise removal. |
+| Automatic playback leveling | **Yes** | Audio → Playback → Automatic volume leveling toggle; Web Audio `DynamicsCompressorNode` on the mixed voice path. Fixed threshold −30 dB, knee 10 dB, ratio 4, attack 0.005 s, release 0.3 s. Not per-speaker AGC. |
+| Master playback gain | **Yes** | Audio → Playback → Voice volume; Web Audio `GainNode`, persisted; same output path as the test tone. |
+| Per-speaker playback gain | **Yes**, connector advertises `clientVolume` | Audio → Per-speaker volume; existing connector mixer gain per UID, 0–200%, persisted/reapplied with reset controls. This is separate from the mixed playback compressor. |
+| Microphone monitoring | **Yes**, diagnostic audio route | Audio → Capture → Test microphone; monitors processed capture through playback gain/output. Test-on/off is intentionally a session action, not a saved open-microphone state. |
+| Shared-tab/music input mix | Module has a fixed −6 dB extra-source mix, but **no supported desktop tab-audio source is enabled** (`TAB_AUDIO_SUPPORTED` is deliberately false) | No dead mixer toggle or gain slider. TS6 screen-source audio is the broadcaster's existing source-audio setting, not microphone DSP. The fixed PCM mix coefficient is not a configurable DSP API. |
+| PCM sample rate, clipping and Opus encode/decode/mix | **Yes**, fixed transport processing | 48 kHz/20 ms PCM and integer saturation in the existing frontend; Opus/protocol behavior remains in the untouched connector/library. No fabricated rate/codec-processing settings; changing these would violate the protocol black-box rule. |
+| RNNoise / neural denoise / neural VAD / capture EQ / high-pass / manual capture gain / configurable compressor parameters | **ABSENT FROM THE EXPOSED STACK** | No such MicCapture/connector setting API exists. Native noise suppression/AGC and the fixed playback compressor above are not misrepresented as these features. No implementation was improvised. |
+
+Native DSP controls send the actual media constraints, not cosmetic state. Browser support
+advertisement does not prove a particular microphone driver honors every request: acoustic
+quality and WebView2/device behavior still require real Windows testing. Local tests fake the
+media/audio APIs to verify constraints, routing and PCM behavior, not audio quality.
+
+### Required TeamSpeak-client coverage table
+
+| Important area | Hub location / implemented coverage | Plainly absent capabilities |
+|---|---|---|
+| Connection / identity | **Connection**: saved address:port/nickname/identity, auto-connect, presets, identity import/export, passwords/security, session behavior, contacts/whisper policy and transfer preferences. Connect is a hub-reachable session child for passwords/default channel/privilege key. | **ABSENT FROM THE STACK:** phonetic speech, per-favorite identity profiles and identity security-level tuning UI/API; no dead fields. |
+| Capture | **Audio → Capture**: input device, enable/test, VAD threshold/hangover, PTT/continuous, native NS/AEC/AGC, AEC3, typing attenuation. **Hotkeys** owns the PTT binding (Audio links to the same binding state). | **ABSENT FROM THE EXPOSED STACK:** manual input gain, EQ/high-pass, neural processing, multiple capture profiles. |
+| Playback | **Audio → Playback / Per-speaker volume**: device dropdown, supported native picker, voice gain, leveling, test tone, mic clicks, connector speaker gains/resets. | **ABSENT FROM THE STACK:** configurable per-speaker compressors or playback profile engine; mixed leveling is not advertised as either. |
+| Hotkeys | **Hotkeys**: all six bindable app actions, capture, chords, conflict checks, clear and restart persistence. PTT mouse capture retained. | **ABSENT FROM THIS BUILD:** global OS key hooks/plugin; widget navigation is not an arbitrary action-binding engine. |
+| Notifications | **Notifications & sounds**: global/event sound enable/volume, join/leave/message/poke etc., custom sounds/packs, notification tree/scripts/text positions, muted policy, disconnect text and away presets. | **ABSENT FROM THIS BUILD:** native desktop-notification plugin/capability; no fake permission toggle. |
+| Chat behavior | **Appearance → Chat**: line limits, font/size/reset, per-scope logging/restoration and notification policy. **Connection → Application/privacy**: auto-open channel chat, poke behavior, banner/chat image choices; notification scripts/messages remain in Notifications. | No missing existing ChatSettings/AppSettings fields were found. Speech/phonetic output is absent, not confused with chat fonts. |
+| Appearance | **Appearance**: existing layout/accent, effective brightness/glass choices, Reduce animations, name defaults, tree/GIF preferences, IDE font, SVG icon-pack selection/import/delete; **Profile** opens Step 4 customization. | **ABSENT/DEFERRED:** unavailable integrations/badges and `.chipstheme` (Step 7 placeholder only). Existing custom layouts remain selectable, but no theme-file feature is started. |
+
+### Full stock surface audit / disposition
+
+Inventory method: reviewed **every `*Panel`, `*Dialog` and `*Settings` component in App.tsx**,
+all persistent-key readers/writers in `web/src`, public methods in `voice.ts`/`aec3.ts`, the
+actual Tauri socket dispatch/features, and ancillary browser-only surfaces. This table is the
+exhaustive disposition list rather than a claim that every dialog is an app preference.
+
+| Stock surface(s) | Disposition |
+|---|---|
+| Options Application (`AnwendungPanel`) | Connection; all seven AppSettings flags plus the two privacy/display flags retained. Subscription-only-current was unsupported and remains hidden. |
+| Options Account (`KontoPanel`) | Connection local-only notice in Tauri; cloud account controls remain gated out. |
+| Options Playback / Capture (`WiedergabePanel`, `AufnahmePanel`) | Audio, including every exposed DSP/device method and test route; see explicit DSP inventory. |
+| Options Hotkeys (`HotkeysPanel`) | Hotkeys; six real bindings instead of three fixed shortcuts plus partial PTT binding. |
+| Options Sounds / Notifications / Messages (`SoundsPanel`, `MeldungenPanel`, `NachrichtenPanel`) | Notifications & sounds; no existing event/custom-sound/pack/message control omitted. |
+| Options Design / legacy manager / store | Appearance; all working display/tree/IDE/icon controls retained, icon import/delete restored separately; cloud store unavailable, custom theme-file tooling deferred without adding Step 7. |
+| Options Extensions | Unsupported placeholder removed. No extension runtime exists. |
+| Options Whisper (`WhisperPanel`), `WhisperListsDialog` | Audio and hub child; runtime whisper target action remains available. |
+| Options Downloads (`DownloadsPanel`), `FileTransfersWindow` | Saved transfer limits/concurrency/UI choices in Connection. Transfer window is an operational queue, not another preferences page. Unsupported folder picker remains hidden by runtime API check. |
+| Options Chat (`ChatPanel`) | Appearance; all ChatSettings fields retained. |
+| Options Security (`SecurityPanel`, `MasterPasswordRow`) | Connection, including existing local-vault forms; not another standalone settings entry. |
+| `ConnectDialog`, `FavoritesDialog`, `IdentitiesDialog` | Connection and hub children; Connect still also opens as a runtime connect action. Removed stock unsupported profile/phonetic fields; no alternative global settings page. |
+| `ContactsDialog` | Connection child; no top-menu settings editor. Existing local name/category/ignore/whisper policy retained, unused speech field hidden. |
+| `ProfileStyleEditor` | Profile child; existing styles.json profile transfer stays Step 4, not a theme format. |
+| `StreamSettingsDialog` | Audio child, saved broadcast defaults; toolbar setup goes through same hub, explicit Go live retains existing protocol path. SFU absent. |
+| Client context speaker-volume slider | Replaced by link to Audio's actual saved per-speaker controls; no hidden parallel setting. |
+| `AwayDialog`, channel-password entry, nickname change | Immediate session actions/credentials; away templates/default nickname live in the hub. Current-nickname editor is a Connection child. |
+| `ClientConnectionInfoDialog`, `ServerConnectionInfoDialog`, `ClientLogDialog`, `ServerProtocolLogDialog`, `PermissionOverviewDialog`, `WhisperHistoryDialog` | Read-only diagnostics/history; retained as operational views, not app preferences. |
+| `GroupAssignDialog`, `MoveClientDialog`, `PermissionsEditorDialog`, `ServerEditDialog`, server icon manager | Server-authorized administration of remote server objects, not hidden local app settings. Not rewritten into client preferences or protocol behavior. |
+| `FileBrowserDialog`, invite, collected URLs, offline-message, ban and complaint dialogs | File/session/server actions and data views, not global preferences. Their control icons are vectors now as well. |
+| About, feedback, ToS, restart/update notices | Informational/gated web-only or lifecycle surfaces, not app settings; no new calls-home route. |
+| Main entry local vault unlock / identity import/sync bootstrap | Startup credentials and existing web-only sync gates, not preference menus; desktop sync remains blocked. |
+
+### Vector icon replacement map and guard
+
+Added lightweight local `<UiIcon>` references to **the existing `public/icons.svg` sprite**
+using the same currentColor stroke style as the existing TeamSpeak inline SVGs. No icon package,
+font, CDN or animation was added. Replaced app-defined emoji and text-glyph control icons across
+hub sections, self-bar mic/deafen/gear, status/away/lock/stream indicators, top menus/toolbars,
+profile close controls, favorites/identities/contact children, sound-pack controls, transfer/file
+operations, administration/context-menu actions and tab close. Streaming choice labels now use
+plain English rather than emoji. English translated test-tone/sound/preset labels were cleaned
+up, and the static memorial decoration is plain text; user nicknames/channels/messages were not
+transformed. The toolbar Chips mark now uses the existing SVG instead of its PNG sibling.
+The legacy CSS send-arrow glyph now masks with a tiny bundled SVG. User avatars/banners and
+server-provided group/icon image content remain content, not replacement UI control icons;
+Windows packaging icons keep the OS-required `.ico` representation.
+
+`vector-icons.test.ts` parses every root TSX module to reject static emoji literals, checks the
+English dictionary, checks all literal/dynamic section icon references resolve in the local
+sprite, and tests that raster-only icon packs cannot override UI vectors. It intentionally does
+not strip emoji from dynamic user content.
+
+### Follow-up validation
+
+On the final follow-up source: **32/32 tests pass** (bridge, motion policy, hub coverage,
+keyboard persistence/chords/clear, audio DSP routing/PCM tests, broadcast-default storage and
+vector-icon policy). Production `tsc`/Vite build passes; lint is **0 errors / 11 inherited
+warnings**. No dependency/lockfile, telemetry, native capability, CSP, connector, gateway or
+`tsclientlib` change. The App bundle is about **410 kB / 104.5 kB gzip** plus ~9 kB of local
+SVG sprite paths and a tiny send mask; no new runtime framework or process. The installed-size/
+RAM weight budget was not relaxed, and real Windows RAM was not measured in this sandbox.
+
+A final Windows Actions installer run on the pushed final commit is required and linked in
+PR #6 and the final report. Artifact remains **Chips-win-x64**. The earlier 18-test green run is
+not presented as proof for these additions. Real Windows device/voice/two-client/visual checks
+still require a Windows PC; mocked DSP tests are not acoustic testing. No Step 7 implementation
+or merge has been performed.

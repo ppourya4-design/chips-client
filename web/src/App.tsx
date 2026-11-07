@@ -2715,12 +2715,10 @@ function StreamSettingsDialog({
             <span>{t("publish.audio")}</span>
             <label
               className="ts-stream-settings-toggle"
-              title={source === "camera" ? t("publish.audio.cameraHint") : undefined}
             >
               <input
                 type="checkbox"
                 checked={audio && source === "display"}
-                disabled={source === "camera"}
                 onChange={(e) => setAudio(e.target.checked)}
               />
               <span />
